@@ -1,0 +1,219 @@
+{{/*
+  topics.html.tmpl — EstateMuse "share the topic list with the team"
+  HTML companion template (Go html/template syntax).
+
+  Schema: topics-table.v1
+  Renderer: pkg/artifact.HTMLRenderer (auto-injects @media print CSS —
+  do NOT duplicate the print stylesheet in this file).
+
+  Each row carries two action buttons (生成图文 / 生成短视频) that POST
+  to the agent's per-row action endpoint. The button URLs include the
+  row-scoped JWT (.RowToken below) so the team can share this HTML
+  page without exposing the operator's sk-soya bearer key. Token
+  semantics live in pkg/auth/rowtoken.go (DD-019 / APP-503).
+
+  Visual system: Soya "Stone-Ground Warmth" (DESIGN.soya.md). Colour
+  variables match example-essay-tutor/templates/guide.html.tmpl so the
+  two flagship references read as a single brand.
+*/}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} · EstateMuse 选题清单</title>
+  <style>
+    :root {
+      --soy-milk:      #FBFAF5;
+      --tofu:          #FFFFFF;
+      --soy-sauce:     #2B2419;
+      --soybean-gold:  #E0A52C;
+      --soybean-skin:  #FBEFCF;
+      --roasted-soy:   #A6781C;
+      --edamame:       #7BA23F;
+      --adzuki:        #B5443C;
+      --warm-700:      #4A4133;
+      --warm-600:      #6B6051;
+      --warm-500:      #8C8170;
+      --warm-200:      #E7E0CC;
+      --warm-100:      #F1ECDC;
+      --border-subtle: rgba(75,65,51,0.08);
+      --border-medium: rgba(75,65,51,0.14);
+      --shadow-card:   rgba(75,55,30,0.06) 0 2px 6px;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--soy-milk);
+      color: var(--soy-sauce);
+      font-family: "Plus Jakarta Sans", "PingFang SC", "HarmonyOS Sans SC",
+                   system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      color: var(--roasted-soy);
+      margin-bottom: 12px;
+    }
+    h1.title {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -0.4px;
+      margin: 0 0 28px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: var(--warm-600);
+    }
+    .toolbar input {
+      flex: 1 1 220px;
+      padding: 10px 14px;
+      border: 1px solid var(--border-medium);
+      border-radius: 14px;
+      background: var(--tofu);
+      font: inherit;
+      color: var(--soy-sauce);
+    }
+    table.topics {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--tofu);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+    table.topics thead th {
+      background: var(--warm-100);
+      color: var(--warm-700);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-medium);
+    }
+    table.topics tbody td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: top;
+      font-size: 14px;
+      color: var(--warm-700);
+    }
+    table.topics tbody tr:last-child td { border-bottom: none; }
+    table.topics tbody tr:hover { background: var(--warm-100); }
+    .col-title  { width: 32%; color: var(--soy-sauce); font-weight: 600; }
+    .col-dim    { width: 8%;  }
+    .col-angle  { width: 8%;  }
+    .col-hook   { width: 24%; }
+    .col-diff   { width: 6%;  }
+    .col-act    { width: 22%; }
+    .tag {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      background: var(--soybean-skin);
+      color: var(--roasted-soy);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .actions a.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 14px;
+      background: var(--soybean-gold);
+      color: var(--soy-sauce);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: background 120ms ease;
+    }
+    .actions a.btn:hover { background: var(--roasted-soy); color: var(--tofu); }
+    .actions a.btn.secondary {
+      background: var(--tofu);
+      color: var(--soy-sauce);
+      border-color: var(--border-medium);
+    }
+    .actions a.btn.secondary:hover { background: var(--warm-200); }
+
+    .footer-note {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--warm-500);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">EstateMuse · 选题清单</div>
+    <h1 class="title">{{ .Title }}</h1>
+
+    <div class="toolbar">
+      <input type="search" placeholder="筛选标题 / 维度 / 切面…" disabled>
+      <span>共 {{ len .Rows }} 条 · 频道 = {{ .Channel }}</span>
+    </div>
+
+    <table class="topics">
+      <thead>
+        <tr>
+          <th class="col-title">标题</th>
+          <th class="col-dim">维度</th>
+          <th class="col-angle">切面</th>
+          <th class="col-hook">钩子</th>
+          <th class="col-diff">难度</th>
+          <th class="col-act">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ range $i, $row := .Rows }}
+        <tr>
+          <td class="col-title">{{ $row.Title }}</td>
+          <td class="col-dim"><span class="tag">{{ $row.Dimension }}</span></td>
+          <td class="col-angle"><span class="tag">{{ $row.Angle }}</span></td>
+          <td class="col-hook">{{ $row.Hook }}</td>
+          <td class="col-diff">{{ $row.Difficulty }}</td>
+          <td class="col-act">
+            <div class="actions">
+              <a class="btn" href="{{ $.ActionBaseURL }}/v1/agents/estate-muse/actions/generate_post?row_id={{ $row.RowID }}&token={{ $row.PostToken }}">生成图文</a>
+              <a class="btn secondary" href="{{ $.ActionBaseURL }}/v1/agents/estate-muse/actions/generate_video?row_id={{ $row.RowID }}&token={{ $row.VideoToken }}">生成短视频</a>
+            </div>
+          </td>
+        </tr>
+        {{ end }}
+      </tbody>
+    </table>
+
+    <p class="footer-note">
+      每行的两个按钮内嵌一个 24 小时过期的 row-scoped JWT，仅能触发本行的 generate_post / generate_video。
+      凭据轮换与吊销见
+      <a href="https://github.com/soyaos/soyaos/tree/main/pkg/auth">pkg/auth/rowtoken.go</a>。
+    </p>
+  </main>
+</body>
+</html>

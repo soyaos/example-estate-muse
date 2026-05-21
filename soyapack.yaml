@@ -1,0 +1,113 @@
+spec_version: soyapack.v0
+kind: Agent
+name: estate-muse
+version: 0.1.0-alpha.0
+description: |
+  EstateMuse — one sentence in, a 500-row editorial Excel out; every row
+  spins up a WeChat 图文 or 短视频 in under a minute. DD-010 flagship
+  reference for xlsx artifacts + per-row Actions.
+authors:
+  - name: SoyaOS Contributors
+    email: hello@soyaos.ai
+license: MIT
+homepage: https://github.com/soyaos/example-estate-muse
+runtime:
+  compat: ">=0.1.0 <0.2.0"
+determinism: stateful
+affinity: any
+
+expose:
+  openai_compat: both
+  virtual_model_id: soya:estate-muse
+
+inputs:
+  - name: seed
+    type: string
+    optional: false   # the one-sentence brief, e.g. "杭州亚运村二手房 500 条选题"
+  - name: target_count
+    type: number
+    optional: true    # default 500; lower this for smoke tests
+  - name: city_hint
+    type: string
+    optional: true
+
+# 3-step prompt chain (APP-550 Phase B):
+#
+#   collect → turn the seed into 60 raw candidate themes (broad coverage,
+#             every facet of the target market)
+#   expand  → fan each candidate into ~9 concrete topic angles so the
+#             generated workbook averages 500 rows total
+#   dedupe  → cluster near-duplicates, drop the obvious repeats, and emit
+#             the final guide.v1 sheet structure
+#
+# Each stage feeds its full response into the next; only the final
+# stream is returned to the caller. The chat surface (POST
+# /v1/chat/completions, model=soya:estate-muse) is what produces the
+# initial xlsx. Per-row buttons live on the rendered HTML companion and
+# fire the actions block below.
+prompt:
+  scaffold: minimal-input-high-quality
+  tools: [tool.originality_check]
+  # prompt.upstream is intentionally omitted: EstateMuse benefits from a
+  # stronger generalist model than the operator-level default. Set
+  # SOYA_MODEL_NAME=gpt-4o (or pin via `prompt.upstream`) when deploying
+  # to get the rated quality.
+  steps:
+    - { id: collect, prompt: prompts/collect.md }
+    - { id: expand,  prompt: prompts/expand.md }
+    - { id: dedupe,  prompt: prompts/dedupe.md }
+
+artifacts:
+  - kind: xlsx
+    schema: topics.v1
+  - kind: html
+    schema: topics-table.v1
+  - kind: markdown
+    schema: wechat_post.v1
+  - kind: markdown
+    schema: video_script.v1
+
+# Two per-row Action triggers. EstateMuse's editorial workflow is
+# "scroll the Excel until a row looks promising, click 生成图文 to draft a
+# WeChat article, or 生成短视频 to draft a 30-second script". Each action
+# is its own prompt file under prompts/. (DD-010 / APP-502)
+#
+# RegisterFromPack loads each handler prompt at register time. POST
+# /v1/agents/estate-muse/actions/{action_id} runs the prompt with a
+# JSON envelope { row_id, payload } as the user message; the streamed
+# body lands in ActionResult.Output["content"].
+actions:
+  - id: generate_post
+    on: per_row
+    handler: prompts/generate_post.md
+    timeout: 60s
+    artifacts: [wechat_post]
+  - id: generate_video
+    on: per_row
+    handler: prompts/generate_video.md
+    timeout: 60s
+    artifacts: [video_script]
+
+# Stateful Agent: the 500-row workbook is kept under the agent's own
+# state partition so the per-row action endpoints can look up a row's
+# original context without trusting the caller's payload. (DD-010
+# Stateful Agent surface — pkg/state)
+state:
+  scope: agent
+  store: kv
+
+sandbox:
+  isolation: container
+  image: html-base@0.1.0
+  budget_seconds_max: 300        # 5 min for the initial 500-row run
+  cold_start_target_ms: 3000
+  capabilities:
+    network_out:
+      - host: api.openai.com
+        port: 443
+        proto: https
+    fs_read:
+      - /workdir
+    fs_write:
+      - /workdir/out
+    determinism_tier: stateful

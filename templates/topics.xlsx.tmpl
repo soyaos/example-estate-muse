@@ -1,0 +1,49 @@
+{{/*
+  topics.xlsx.tmpl — EstateMuse topic-list Excel snapshot template
+  (Go html/template syntax).
+
+  Schema: topics.v1
+  Renderer: pkg/artifact.XLSXRenderer
+
+  XLSXRenderer takes a JSON snapshot (XLSXSnapshot) directly — it does
+  not template-render. This file is therefore a *reference description*
+  of the snapshot shape the dedupe prompt produces, kept here so
+  human readers can audit the column layout without grepping the
+  prompt. The renderer wiring is:
+
+      snapshot := <output of prompts/dedupe.md>
+      art, err := XLSXRenderer{Schema:"topics.v1"}.Render(ctx, snapshot, dst)
+
+  When rendered:
+    - Header row is frozen (freeze_header=true).
+    - Each row carries a hidden hyperlink built from per_row_action_url
+      with {row_id} substituted by the 1-based row index.
+    - Dimension / 切面 / 难度 / 建议产物 columns have dropdown validation.
+
+  Column layout:
+
+  | 标题 | 维度 | 切面 | 钩子 | 难度 | 建议产物 |
+  |------|------|------|------|------|----------|
+  | 42   | 12   | 10   | 36   | 8    | 14       |  ← widths (chars)
+
+  per_row_action_url is the WeChat-post action; the HTML companion
+  template surfaces both 生成图文 + 生成短视频 buttons per row.
+*/}}
+{
+  "sheets": [
+    {
+      "name": "Topics",
+      "freeze_header": true,
+      "per_row_action_url": "{{ .ActionBaseURL }}/v1/agents/estate-muse/actions/generate_post?row_id={row_id}",
+      "columns": [
+        {"header": "标题",    "width": 42},
+        {"header": "维度",    "width": 12, "validation": ["buy","hold","sell","market","policy","lifestyle","risk","compare"]},
+        {"header": "切面",    "width": 10, "validation": ["数据","案例","对比","操作","争议"]},
+        {"header": "钩子",    "width": 36},
+        {"header": "难度",    "width": 8,  "validation": ["low","med","high"]},
+        {"header": "建议产物", "width": 14, "validation": ["图文","短视频","图文+短视频"]}
+      ],
+      "rows": {{ .RowsJSON }}
+    }
+  ]
+}

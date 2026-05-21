@@ -1,0 +1,22 @@
+# Build / release artifacts (SoyaPack archives, rendered topic lists)
+/dist/
+/artifacts/
+*.tar.zst
+*.xlsx
+*.pdf
+*.png.tmp
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Local renderer scratch
+/.scratch/

@@ -1,0 +1,29 @@
+{
+  "sheets": [
+    {
+      "name": "Topics",
+      "freeze_header": true,
+      "per_row_action_url": "https://soyaos.local/v1/agents/estate-muse/actions/generate_post?row_id={row_id}",
+      "columns": [
+        {"header": "标题",    "width": 42},
+        {"header": "维度",    "width": 12, "validation": ["buy","hold","sell","market","policy","lifestyle","risk","compare"]},
+        {"header": "切面",    "width": 10, "validation": ["数据","案例","对比","操作","争议"]},
+        {"header": "钩子",    "width": 36},
+        {"header": "难度",    "width": 8,  "validation": ["low","med","high"]},
+        {"header": "建议产物", "width": 14, "validation": ["图文","短视频","图文+短视频"]}
+      ],
+      "rows": [
+        ["亚运村次新房 2024 全年成交价柱状图", "market",    "数据", "亚运村去年到底涨没涨，一张图说清楚", "med",  "图文"],
+        ["30 万首付能在亚运村买到什么样的房子",  "buy",       "案例", "30 万首付的亚运村购房清单",         "low",  "图文+短视频"],
+        ["亚运村 vs 滨江区次新房价比",            "compare",   "对比", "同价位换板块，3 公里之差到底差在哪里", "med",  "图文+短视频"],
+        ["亚运村小区物业服务横评",                 "hold",      "对比", "5 个亚运村小区物业打分", "low",  "图文"],
+        ["杭州限购对亚运村次新房的影响",           "policy",    "数据", "限购新政之后亚运村成交量变化",     "high", "图文"],
+        ["亚运村到武林广场通勤实测",               "lifestyle", "案例", "早 8 点出门，9 点能否在武林开会",   "low",  "短视频"],
+        ["亚运村二手房常见合同陷阱",               "risk",      "操作", "签合同前必看的 5 个陷阱条款",      "med",  "图文"],
+        ["亚运村次新房卖出时机",                   "sell",      "争议", "现在卖还是再等一年",               "high", "图文"],
+        ["亚运村首付门槛实测",                     "buy",       "数据", "实测亚运村 12 个挂牌房的首付预算", "med",  "图文"],
+        ["亚运村学区房新政影响",                   "policy",    "争议", "学区调整后哪些楼盘价值缩水",       "high", "图文"]
+      ]
+    }
+  ]
+}
