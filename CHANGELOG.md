@@ -7,6 +7,25 @@ and this SoyaPack adheres to [Semantic Versioning](https://semver.org/spec/v2.0.
 
 ## [Unreleased]
 
+### Added
+
+- `e2e/` verification module (APP-1059): KV state-store verification
+  (read/write MVCC, CAS semantics, row-scope isolation, restart
+  persistence, 500-row workbook scale) and full-stack row-scoped JWT
+  auth E2E (positive + substitution / expiry / forged-signature /
+  escalation negative cases) against the sibling SoyaOS kernel
+  checkout, all run with `-race` over real bbolt files and a real TCP
+  gateway. `make e2e` is the entry point.
+- `Makefile` with `e2e` / `test` targets.
+
+### Known issues (kernel-side, found by the e2e suite)
+
+- APP-1071 — `pkg/state.BoltStore.CompareAndSwap` is not atomic:
+  concurrent CAS writers silently lose updates. Reproduction gated
+  behind `E2E_RUN_KNOWN_DEFECTS=1`.
+- APP-1072 — `soyaos start` never wires the row-token signer, so row
+  JWTs are rejected 401 by production binaries.
+
 ## [0.1.0-alpha.0] — 2026-05-21
 
 ### Added

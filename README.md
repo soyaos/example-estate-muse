@@ -101,6 +101,37 @@ The `soyaos` CLI is still under heavy construction; some of the commands
 above will error until the corresponding milestones land (see the parent
 SoyaOS roadmap for `soyaos agent build` / `deploy` / `invoke` status).
 
+## Verification (`e2e/`)
+
+The pack itself is declarative, but its two load-bearing runtime
+contracts — `state: { scope: agent, store: kv }` and the per-row JWT
+security model — are verified end to end by the Go module under
+[`e2e/`](./e2e), built against the sibling SoyaOS kernel checkout
+(`../soyaos`, see the `replace` directive in `e2e/go.mod`):
+
+```bash
+make e2e          # = cd e2e && go test -race -count=1 -v ./...
+```
+
+- `kv_state_test.go` — KV state store against a real bbolt file:
+  read/write with MVCC version bumps, CAS conflict semantics, row-scope
+  isolation (row-17 state invisible to row-99), prefix listing, restart
+  persistence, and the 500-row workbook scale path. The concurrency
+  case is gated behind `E2E_RUN_KNOWN_DEFECTS=1` while kernel defect
+  APP-1071 (non-atomic CAS, lost updates) is open.
+- `rowjwt_e2e_test.go` — full-stack row-JWT auth over a real TCP
+  gateway with this repo's actual manifest + prompts registered:
+  positive (own row / both actions / sk-soya bearer / signer restart /
+  24h-cap boundary) and negative (row, action and agent substitution,
+  expiry, forged signature, garbage or missing credential, escalation
+  to `/v1/chat/completions`) — every rejection verified to happen
+  before any upstream LLM call. Note: `soyaos start` does not yet wire
+  the row-token signer (APP-1072), so production binaries reject row
+  JWTs until that lands.
+- `manifest_test.go` — the shipped `soyapack.yaml` passes the
+  authoritative `pkg/soyapack.Validate` and declares the state /
+  action / expose surfaces the suite exercises.
+
 ## Repository layout
 
 ```
