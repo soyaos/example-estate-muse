@@ -17,6 +17,25 @@ and this SoyaPack adheres to [Semantic Versioning](https://semver.org/spec/v2.0.
   checkout, all run with `-race` over real bbolt files and a real TCP
   gateway. `make e2e` is the entry point.
 - `Makefile` with `e2e` / `test` targets.
+- `e2e/xlsx_compat_test.go` (APP-1065): XLSX rendering & Excel-environment
+  compatibility verification for the `topics.v1` export — renders a
+  representative 500-row workbook (Chinese headers, dropdown validation,
+  frozen header, per-row action hyperlinks, numeric second sheet with
+  3-color conditional formatting) through the production
+  `pkg/artifact.XLSXRenderer`, post-processes merged cells + explicit
+  number formats (`#,##0.00` / `0.0%`) with the renderer's own excelize
+  writer, and structurally asserts the result by parsing the bytes back
+  (plus raw worksheet XML for the AutoFilter). Set
+  `E2E_WRITE_XLSX_SAMPLE=1` to regenerate the manual-check sample at
+  `e2e/testdata/topics-compat-sample.xlsx` (gitignored; xlsx bytes are
+  not reproducible).
+
+### Known issues (renderer-side, found by the compatibility suite)
+
+- `pkg/artifact.XLSXRenderer` exposes no merged-cell or explicit
+  number-format controls in its snapshot schema; the compatibility
+  sample has to post-process those constructs with excelize directly.
+  Tracked on APP-1065 for a follow-up renderer capability decision.
 
 ### Known issues (kernel-side, found by the e2e suite)
 

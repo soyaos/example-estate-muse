@@ -131,6 +131,16 @@ make e2e          # = cd e2e && go test -race -count=1 -v ./...
 - `manifest_test.go` — the shipped `soyapack.yaml` passes the
   authoritative `pkg/soyapack.Validate` and declares the state /
   action / expose surfaces the suite exercises.
+- `xlsx_compat_test.go` — XLSX / Excel-environment compatibility for
+  the `topics.v1` export (APP-1065): a representative 500-row workbook
+  (Chinese headers, dropdown validation, frozen header, per-row action
+  hyperlinks, numeric sheet with 3-color conditional formatting) is
+  rendered through the production `pkg/artifact.XLSXRenderer`,
+  post-processed for merged cells + number formats (a renderer API
+  gap), and structurally asserted by parsing the bytes back. Run with
+  `E2E_WRITE_XLSX_SAMPLE=1` to (re)write the manual-check sample at
+  `e2e/testdata/topics-compat-sample.xlsx` (gitignored) for opening in
+  Microsoft Excel / WPS / Numbers.
 
 ## Repository layout
 
