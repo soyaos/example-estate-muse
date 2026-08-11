@@ -155,7 +155,9 @@ The suite runs with the race detector and covers:
 - `kv_state_test.go` — bbolt persistence, MVCC/CAS concurrency, row isolation,
   prefix listing, deletion, restart, and 500-row scale;
 - `rowjwt_e2e_test.go` — positive and negative row-token authorization over a
-  real HTTP gateway, including substitution, expiry, forgery, and escalation;
+  real HTTP gateway, including substitution, expiry, forgery, and escalation.
+  The persistent signer wired by APP-1072 is also verified across process
+  restarts: matching tokens survive while mismatched tokens fail;
 - `manifest_test.go` — authoritative manifest validation and declared surfaces;
 - `xlsx_compat_test.go` — 500-row Excel structure, Chinese content, filters,
   validation, hyperlinks, numeric formats, and compatibility sample export.
