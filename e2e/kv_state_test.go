@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 
@@ -130,22 +129,10 @@ func TestKV_CAS_InitialInsertSemantics(t *testing.T) {
 // ("callers retry by re-reading"). Every increment must land — a lost
 // update means two parallel per-row actions trampled each other.
 //
-// KNOWN DEFECT — APP-1071: pkg/state.BoltStore.CompareAndSwap performs
-// its version check (Get) and its write (Put) in two separate bbolt
-// transactions with no mutex, so the check-then-write is not atomic.
-// Measured result on kernel HEAD 577b2d1: 16 writers × 10 bumps → final
-// counter 10 instead of 160 (150 silent lost updates, zero ErrConflict).
-// The test is skipped by default until the kernel fix lands; run the
-// reproduction with:
-//
-//	E2E_RUN_KNOWN_DEFECTS=1 go test -race -run TestKV_ConcurrentCASCounter ./...
-//
-// Once APP-1071 is fixed, delete the skip gate below.
+// APP-1071 fixed this path by serializing BoltStore's read-modify-write
+// sequence. Keep the regression enabled by default so lost updates cannot
+// silently return.
 func TestKV_ConcurrentCASCounter(t *testing.T) {
-	if os.Getenv("E2E_RUN_KNOWN_DEFECTS") == "" {
-		t.Skip("known kernel defect APP-1071 (pkg/state CAS not atomic — lost updates under concurrency); " +
-			"set E2E_RUN_KNOWN_DEFECTS=1 to run the reproduction")
-	}
 	kv, done := openKV(t, t.TempDir())
 	defer done()
 	ctx := context.Background()

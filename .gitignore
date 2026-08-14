@@ -1,10 +1,22 @@
 # Build / release artifacts (SoyaPack archives, rendered topic lists)
 /dist/
 /artifacts/
+/.soyaos-data/
 *.tar.zst
 *.xlsx
 *.pdf
 *.png.tmp
+
+# Private trial evidence (only anonymized Markdown belongs in Git)
+/feedback/**/*.jpeg
+/feedback/**/*.jpg
+/feedback/**/*.m4a
+/feedback/**/*.mov
+/feedback/**/*.mp3
+/feedback/**/*.mp4
+/feedback/**/*.png
+/feedback/**/*.wav
+/feedback/**/*.webm
 
 # Editor / IDE
 .vscode/

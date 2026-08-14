@@ -50,6 +50,7 @@ import (
 	"github.com/soyaos/soyaos/pkg/llmcall"
 	"github.com/soyaos/soyaos/pkg/openaicompat"
 	"github.com/soyaos/soyaos/pkg/soyapack"
+	"github.com/soyaos/soyaos/pkg/state"
 	"github.com/soyaos/soyaos/pkg/store"
 )
 
@@ -152,6 +153,7 @@ func startHarness(t *testing.T) *harness {
 		t.Fatalf("validate manifest: %v", err)
 	}
 	k := kernel.New()
+	k.SetStateStore(state.NewBoltStore(soyaStore))
 	if err := k.RegisterFromPack(m, packDir(t)); err != nil {
 		t.Fatalf("RegisterFromPack: %v", err)
 	}

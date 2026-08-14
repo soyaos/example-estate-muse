@@ -1,170 +1,188 @@
 # example-estate-muse — EstateMuse (DD-010 flagship reference)
 
-> *One sentence in. Five minutes later, a 500-row Excel of editorial-grade
-> topic ideas comes out — and every row has a button that spins up a
-> WeChat 图文 or 30-second 短视频 in under a minute.*
+> [!WARNING]
+> **This project is under active development and has not been formally
+> released. Features and APIs are unstable; breaking changes may happen at
+> any time. Do not depend on this alpha in production.**
+>
+> **本项目仍在开发中，尚未正式发布。功能尚不稳定，接口和行为随时可能发生
+> breaking change，请勿将当前 alpha 版本作为生产依赖。**
 
-`example-estate-muse` is the canonical SoyaPack v0 Agent reference for the
-[DD-010 · EstateMuse](https://github.com/soyaos/specs) flagship user story.
-It is the smallest end-to-end example that exercises every Agent-shaped
-edge of the SoyaPack spec that DD-008 / DD-009 did not cover — `xlsx`
-artifacts, per-row actions, row-scoped JWTs, and `state.scope=agent`
-persistence — without any tooling the user wouldn't see in production.
+> *One sentence in. Within five minutes, a 500-row Excel of editorial topic
+> ideas comes out. Any row can generate a WeChat post or short-video script
+> in under one minute.*
 
-This repo is **a SoyaPack, not a Go program**. It is meant to be:
+EstateMuse is the canonical SoyaPack v0 reference for the
+[DD-010 user story](https://github.com/soyaos/specs). It demonstrates the
+parts that distinguish a stateful Agent from a one-shot prompt:
 
-- Read top-to-bottom in ~5 minutes to learn the v0 Agent shape with
-  per-row actions.
-- Built into a `*.soyapack.tar.zst` archive by `soyaos agent build .`.
-- Deployed into a SoyaOS Solo or kernel instance and invoked via the
-  OpenAI-Compat virtual model id `soya:estate-muse`.
+- a three-step prompt chain: `collect → expand → dedupe`;
+- a real `topics.v1` Excel artifact with 500 rows;
+- per-row `generate_post` and `generate_video` actions;
+- agent-scoped persistence that survives a SoyaOS restart;
+- row-scoped JWT authorization for narrowly shared action links.
 
-## What EstateMuse does
+This repository is a declarative SoyaPack—YAML, prompts, templates, examples,
+and E2E tests—not a standalone Go application.
 
-EstateMuse is a content brain for real-estate self-media operators. The
-operator types one sentence — `"杭州亚运村二手房 500 条选题"` — and
-EstateMuse:
+## What works today
 
-1. **collect** — fans the brief into 60 candidate themes across 8 market
-   dimensions (buy / hold / sell / market / policy / lifestyle / risk /
-   compare).
-2. **expand** — expands each candidate into 6–10 concrete, action-ready
-   topic angles, totalling > 540 raw items.
-3. **dedupe** — clusters near-duplicates, dimension+angle-balances the
-   list, and emits the final `topics.v1` snapshot the
-   [`XLSXRenderer`](https://github.com/soyaos/soyaos/tree/main/pkg/artifact)
-   consumes directly.
+The current SoyaOS development build can execute this complete operator path:
 
-The result lands as **two** artifacts:
+1. validate and build the Pack into a reproducible `.spk`;
+2. deploy it to a running Solo process;
+3. invoke `soya:estate-muse` and render the returned snapshot as a real `.xlsx`;
+4. persist the workbook and each row's original context in bbolt;
+5. run a row action using the persisted row as the authoritative payload;
+6. restart SoyaOS and run the same row action without regenerating the workbook.
 
-- `topics.v1` — an `.xlsx` workbook (one sheet, 500 rows, frozen header,
-  dropdown validation on the dim / angle / difficulty / 建议产物 columns).
-- `topics-table.v1` — an HTML companion the operator can share with their
-  team: each row carries 生成图文 + 生成短视频 buttons whose URLs embed
-  a 24h row-scoped JWT (`pkg/auth/rowtoken.go`).
+The HTML companion template and originality tool declaration are present, but
+their automatic runtime orchestration is not complete. See
+[Alpha limitations](#alpha-limitations).
 
-A click on either button fires
-`POST /v1/agents/estate-muse/actions/{action_id}` with `{ row_id, payload }`;
-the kernel loads the action's prompt and the upstream LLM produces:
+## Prerequisites
 
-- `wechat_post.v1` — a 600–900 字 WeChat post with image suggestions, or
-- `video_script.v1` — a 30-second 抖音 / 视频号 script with 画面 cues.
+- Go 1.23.x to build the sibling SoyaOS checkout;
+- a current `soyaos` binary built from
+  [soyaos/soyaos](https://github.com/soyaos/soyaos);
+- an OpenAI-compatible model endpoint and API key;
+- this repository next to the SoyaOS repository when running E2E tests:
 
-Both action handlers self-check for originality before returning; if the
-output bumps into a known mainstream piece, the prompt sets a
-`<!-- ORIGINALITY: REVIEW -->` trailer so the caller can re-generate.
+```text
+workspace/
+├── soyaos/
+└── example-estate-muse/
+```
 
-## 5-minute quickstart
+## Quickstart
+
+### 1. Start SoyaOS
+
+Open terminal A. Configure your OpenAI-compatible provider, then keep the
+process running:
 
 ```bash
-# 1. Build the SoyaPack archive.
+export SOYA_MODEL_API_KEY='replace-with-your-key'
+export SOYA_MODEL_BASE_URL='https://api.openai.com/v1'
+export SOYA_MODEL_DEFAULT='gpt-4o'
+
+soyaos start \
+  --listen 127.0.0.1:7474 \
+  --rpc 127.0.0.1:7475 \
+  --data-dir "$PWD/.soyaos-data"
+```
+
+The local development key is `sk-soya-dev-local`. Treat any non-development
+key like a password and never commit it.
+
+### 2. Validate, build, and deploy the Pack
+
+Open terminal B in this repository:
+
+```bash
+soyaos pack validate .
 soyaos agent build .
+soyaos agent deploy \
+  ./dist/estate-muse-0.1.0-alpha.0.spk \
+  --rpc http://127.0.0.1:7475
+```
 
-# 2. Validate the manifest in isolation.
-soyaos agent validate ./soyapack.yaml
+### 3. Generate a real 500-row Excel workbook
 
-# 3. Deploy into a local Solo instance.
-soyaos agent deploy ./dist/estate-muse-0.1.0-alpha.0.soyapack.tar.zst
+```bash
+mkdir -p ./dist/trial
 
-# 4. Trigger the 500-row brain via the OpenAI-Compat chat surface.
-#    Stream the XLSXSnapshot body; pipe through the `xlsx` renderer
-#    locally if you want a real .xlsx file. (alpha CLI surface still
-#    landing — see SoyaOS roadmap for `soyaos agent invoke` status.)
-curl http://localhost:6473/v1/chat/completions \
-  -H "Authorization: Bearer $SOYA_DEV_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-        "model": "soya:estate-muse",
-        "messages": [
-          {"role":"user","content":"杭州亚运村二手房 500 条选题"}
-        ]
-      }'
+time soyaos agent invoke estate-muse \
+  '杭州亚运村二手房 500 条选题' \
+  --listen http://127.0.0.1:7474 \
+  --key sk-soya-dev-local \
+  --artifact xlsx \
+  --schema topics.v1 \
+  --output ./dist/trial/topics.xlsx
+```
 
-# 5. Trigger a per-row action. row_id is a 1-based index into the
-#    rendered workbook; the row-scoped JWT lives in the HTML
-#    companion's button href.
-curl http://localhost:6473/v1/agents/estate-muse/actions/generate_post \
-  -H "Authorization: Bearer $ROW_JWT_FOR_ROW_17" \
-  -H "Content-Type: application/json" \
+Open `dist/trial/topics.xlsx` in Excel, WPS, or Numbers. Confirm that the
+`Topics` sheet has one header row plus 500 data rows, Chinese text displays
+correctly, filters work, and the header remains frozen while scrolling.
+
+### 4. Generate content from one saved row
+
+The initial invocation has already persisted `row-17`; the caller does not
+need to resend its topic fields:
+
+```bash
+curl http://127.0.0.1:7474/v1/agents/estate-muse/actions/generate_post \
+  -H 'Authorization: Bearer sk-soya-dev-local' \
+  -H 'Content-Type: application/json' \
   -d '{
         "row_id": "row-17",
-        "payload": {
-          "title": "亚运村次新房 2024 全年成交价柱状图",
-          "dimension": "market",
-          "angle": "数据",
-          "hook": "亚运村去年到底涨没涨"
-        }
+        "payload": {"city": "杭州"}
       }'
 ```
 
-The `soyaos` CLI is still under heavy construction; some of the commands
-above will error until the corresponding milestones land (see the parent
-SoyaOS roadmap for `soyaos agent build` / `deploy` / `invoke` status).
+SoyaOS merges action-specific options such as `city` with the saved row. The
+saved title, dimension, angle, and hook override same-named caller fields, so
+an action cannot silently replace the original workbook context.
 
-## Verification (`e2e/`)
+Use `generate_video` instead of `generate_post` to produce the short-video
+script. Each action manifest has a 60-second budget.
 
-The pack itself is declarative, but its two load-bearing runtime
-contracts — `state: { scope: agent, store: kv }` and the per-row JWT
-security model — are verified end to end by the Go module under
-[`e2e/`](./e2e), built against the sibling SoyaOS kernel checkout
-(`../soyaos`, see the `replace` directive in `e2e/go.mod`):
+### 5. Verify restart persistence manually
+
+1. Stop terminal A with `Ctrl+C`.
+2. Run the exact same `soyaos start` command with the same `--data-dir`.
+3. Do **not** rebuild, redeploy, or regenerate the Excel workbook.
+4. Repeat the row-17 `curl` command.
+5. Confirm the action still uses row 17's original topic.
+
+For the two-week author trial, follow the beginner-friendly
+[Chinese trial guide](./TRIAL_GUIDE.zh-CN.md) and create one feedback file per
+session from [the template](./feedback/session-template.md).
+
+## Verification
+
+The E2E module imports the sibling SoyaOS source modules through local
+`replace` directives:
 
 ```bash
-make e2e          # = cd e2e && go test -race -count=1 -v ./...
+make e2e
 ```
 
-- `kv_state_test.go` — KV state store against a real bbolt file:
-  read/write with MVCC version bumps, CAS conflict semantics, row-scope
-  isolation (row-17 state invisible to row-99), prefix listing, restart
-  persistence, and the 500-row workbook scale path. The concurrency
-  case is gated behind `E2E_RUN_KNOWN_DEFECTS=1` while kernel defect
-  APP-1071 (non-atomic CAS, lost updates) is open.
-- `rowjwt_e2e_test.go` — full-stack row-JWT auth over a real TCP
-  gateway with this repo's actual manifest + prompts registered:
-  positive (own row / both actions / sk-soya bearer / signer restart /
-  24h-cap boundary) and negative (row, action and agent substitution,
-  expiry, forged signature, garbage or missing credential, escalation
-  to `/v1/chat/completions`) — every rejection verified to happen
-  before any upstream LLM call. Note: `soyaos start` does not yet wire
-  the row-token signer (APP-1072), so production binaries reject row
-  JWTs until that lands.
-- `manifest_test.go` — the shipped `soyapack.yaml` passes the
-  authoritative `pkg/soyapack.Validate` and declares the state /
-  action / expose surfaces the suite exercises.
-- `xlsx_compat_test.go` — XLSX / Excel-environment compatibility for
-  the `topics.v1` export (APP-1065): a representative 500-row workbook
-  (Chinese headers, dropdown validation, frozen header, per-row action
-  hyperlinks, numeric sheet with 3-color conditional formatting) is
-  rendered through the production `pkg/artifact.XLSXRenderer`,
-  post-processed for merged cells + number formats (a renderer API
-  gap), and structurally asserted by parsing the bytes back. Run with
-  `E2E_WRITE_XLSX_SAMPLE=1` to (re)write the manual-check sample at
-  `e2e/testdata/topics-compat-sample.xlsx` (gitignored) for opening in
-  Microsoft Excel / WPS / Numbers.
+The suite runs with the race detector and covers:
+
+- `production_binary_test.go` — real binary build, Pack validation/build/deploy,
+  500-row XLSX generation, row action, process restart, and saved-row reuse;
+- `kv_state_test.go` — bbolt persistence, MVCC/CAS concurrency, row isolation,
+  prefix listing, deletion, restart, and 500-row scale;
+- `rowjwt_e2e_test.go` — positive and negative row-token authorization over a
+  real HTTP gateway, including substitution, expiry, forgery, and escalation;
+- `manifest_test.go` — authoritative manifest validation and declared surfaces;
+- `xlsx_compat_test.go` — 500-row Excel structure, Chinese content, filters,
+  validation, hyperlinks, numeric formats, and compatibility sample export.
+
+The production-binary test uses a deterministic local mock only for the
+external model endpoint. All SoyaOS, Pack, persistence, HTTP, CLI, and XLSX
+paths are the production implementations.
 
 ## Repository layout
 
-```
+```text
 example-estate-muse/
-├── soyapack.yaml             # Canonical v0 Agent manifest.
-├── README.md                 # You are here.
-├── LICENSE                   # MIT.
-├── CHANGELOG.md              # Keep a Changelog v1.1.
-├── CODE_OF_CONDUCT.md        # Contributor Covenant v2.1.
+├── soyapack.yaml
+├── README.md
+├── TRIAL_GUIDE.zh-CN.md
 ├── prompts/
-│   ├── collect.md            # Stage 1 — 1 句 → 60 候选.
-│   ├── expand.md             # Stage 2 — 60 候选 → 540+ 细选题.
-│   ├── dedupe.md             # Stage 3 — 去重 + 落 topics.v1.
-│   ├── generate_post.md      # per_row action — WeChat 图文.
-│   └── generate_video.md     # per_row action — 30s 短视频脚本.
+│   ├── collect.md
+│   ├── expand.md
+│   ├── dedupe.md
+│   ├── generate_post.md
+│   └── generate_video.md
 ├── templates/
-│   ├── topics.xlsx.tmpl      # XLSXSnapshot reference layout.
-│   └── topics.html.tmpl      # Shareable HTML companion with row buttons.
-└── examples/
-    ├── README.md             # How to add new sample → expected pairs.
-    ├── sample-input-1.txt    # Placeholder 一句话 brief.
-    ├── expected-topics-1.json# Truncated XLSXSnapshot for the brief.
-    └── expected-post-1.md    # Truncated WeChat post for row 1.
+│   ├── topics.xlsx.tmpl
+│   └── topics.html.tmpl
+├── examples/
+├── feedback/
+└── e2e/
 ```
 
 ## Manifest highlights
@@ -173,95 +191,72 @@ example-estate-muse/
 spec_version: soyapack.v0
 kind: Agent
 name: estate-muse
-virtual_model_id: soya:estate-muse
+determinism: stateful
+expose:
+  virtual_model_id: soya:estate-muse
 artifacts:
-  - { kind: xlsx,     schema: topics.v1 }
-  - { kind: html,     schema: topics-table.v1 }
+  - { kind: xlsx, schema: topics.v1 }
+  - { kind: html, schema: topics-table.v1 }
   - { kind: markdown, schema: wechat_post.v1 }
   - { kind: markdown, schema: video_script.v1 }
 actions:
-  - { id: generate_post,  on: per_row, handler: prompts/generate_post.md,  timeout: 60s, artifacts: [wechat_post] }
-  - { id: generate_video, on: per_row, handler: prompts/generate_video.md, timeout: 60s, artifacts: [video_script] }
+  - { id: generate_post, on: per_row, handler: prompts/generate_post.md, timeout: 60s }
+  - { id: generate_video, on: per_row, handler: prompts/generate_video.md, timeout: 60s }
 state:
   scope: agent
   store: kv
-sandbox:
-  isolation: container
-  budget_seconds_max: 300
-  capabilities:
-    network_out:
-      - { host: api.openai.com, port: 443, proto: https }
-    fs_read:  [/workdir]
-    fs_write: [/workdir/out]
-    determinism_tier: stateful
 ```
 
-The manifest is the contract. The validator at
-[`pkg/soyapack.Validate`](https://github.com/soyaos/soyaos/tree/main/pkg/soyapack)
-is the authoritative referee — anything it rejects, every SoyaOS runtime
-will reject.
+The manifest is the contract. Anything rejected by `pkg/soyapack.Validate`
+must not be accepted by the runtime.
 
-## Choosing an upstream model
+## Model configuration
 
-EstateMuse's quality is highly sensitive to the writer-side model. The
-manifest deliberately **omits** `prompt.upstream` so the operator picks
-one of:
+EstateMuse's editorial quality depends heavily on the upstream model. The Pack
+does not pin a provider, so the operator selects one with:
 
-| Upstream | Verdict | When to use |
-|----------|---------|-------------|
-| **gpt-4o**             | Recommended for 朋友圈/公众号 长文 quality | Default production deploy. |
-| gpt-4o-mini            | Halves cost; topic list reads ~85% of gpt-4o | Smoke tests, internal dogfood. |
-| deepseek-chat          | Strong Chinese fluency, weaker on data citations | When the operator's data is closed-loop. |
-| local llama-3.1-70b    | No external egress; quality variance high | Offline / sensitive deployments. |
+| Variable | Meaning | Example |
+|---|---|---|
+| `SOYA_MODEL_API_KEY` | Provider API key | secret; never commit |
+| `SOYA_MODEL_BASE_URL` | OpenAI-compatible base URL | `https://api.openai.com/v1` |
+| `SOYA_MODEL_DEFAULT` | Provider model ID | `gpt-4o` |
 
-Pin a choice by exporting `SOYA_MODEL_NAME=gpt-4o` (and the matching
-`SOYA_MODEL_BASE_URL` + `SOYA_API_KEY`) on the SoyaOS host, or by adding
-a `prompt.upstream:` block to the manifest.
+For a cheap smoke test, use a smaller model. For the two-week editorial trial,
+use one stable Chinese-capable model for the entire cohort so model changes do
+not contaminate author feedback.
 
-## Templates: Go `html/template`, not Nunjucks
+## Per-row security and state
 
-Despite some early planning docs that mentioned `.njk` extensions, this
-repo uses **`html/template` syntax** because that is what
-`pkg/artifact.HTMLRenderer` consumes. The `HTMLRenderer` also
-auto-injects the `@media print` CSS block mandated by DESIGN §9, so the
-templates here deliberately *do not* repeat those rules — adding them
-would only cause two copies to fight at print time.
+- Standard `sk-soya` keys may invoke any action allowed by their scopes.
+- A row JWT is bound to one `(agent_slug, action_id, row_id)` tuple and expires
+  within 24 hours.
+- Changing the row, action, agent, signature, or expiry yields `401` before the
+  external model is called.
+- Workbook row context is stored under the Agent's persistent state partition.
+- Caller-supplied fields cannot overwrite the saved workbook row.
 
-## Per-row JWT security model
+## Alpha limitations
 
-The HTML companion template renders two buttons per row, each carrying a
-row-scoped JWT in the `?token=` query. Token semantics:
-
-- **Scope** — bound to (`agent_slug`, `action_id`, `row_id`).
-- **Lifetime** — 24 hours; the kernel rejects expired tokens 401.
-- **Substitution attack** — token issued for `row-42` posting to
-  `row-99` is rejected 401 (covered by
-  `pkg/openaicompat/actions_test.go::TestActions_RowTokenForDifferentRowRejected`).
-- **Owner key prefix** — the token's `owner_key_prefix` claim is the
-  first 12 chars of the sk-soya bearer that minted it; audit logs can
-  tie row-token traffic back to its origin without unwrapping the
-  bearer.
-
-If you need to share the table with someone whose access should be
-revocable separately, mint the JWTs with a short-lived sk-soya bearer
-and rotate that bearer when you're done.
+- The CLI renders `topics.v1` directly to XLSX; automatic simultaneous HTML
+  companion generation is not wired yet.
+- The manifest declares `tool.originality_check`, but current output quality
+  relies on the prompt's self-review until runtime tool orchestration lands.
+- Real editorial quality, originality, and usefulness still require the
+  five-author, two-week trial tracked separately from the technical E2E.
+- APIs, state schema, commands, and output contracts may change before release.
 
 ## Status
 
-This is **v0.1.0-alpha.0** — the scaffold milestone. The prompts and
-templates are deliberately complete enough to render a believable
-workbook + post; the sample inputs and expected outputs are placeholders
-until the first live editorial operator closes the loop.
-
-| Milestone        | Status |
-|------------------|--------|
-| Manifest + scaffold (APP-553) | ✓ this release |
-| Prompts (chat chain + 2 actions) | ✓ this release |
-| HTML / xlsx templates | ✓ this release |
-| Real sample + expected output | — pending live editorial run |
-| `soyaos agent build` integration | — pending CLI milestone |
-| Production deploy via Solo | — pending |
-| Originality plugin wiring | — pending APP-5xx |
+| Milestone | Status |
+|---|---|
+| Manifest, prompt chain, actions, templates | Complete |
+| Pack validation, build, and Solo deploy | Complete |
+| Real 500-row XLSX through production CLI | Complete |
+| Agent state and row context survive restart | Complete |
+| Real post/video action under 60 seconds | Technically verified with deterministic model mock |
+| Automatic HTML companion rendering | Pending |
+| Runtime originality tool orchestration | Pending |
+| Five authors × two-week editorial acceptance | Pending human trial |
 
 ## License
 

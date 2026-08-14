@@ -9,9 +9,12 @@
 #               -race against real bbolt files and a real HTTP gateway.
 #   make test   alias for e2e.
 
-.PHONY: test e2e
+.PHONY: test e2e production-e2e
 
 test: e2e
 
 e2e:
 	cd e2e && go test -race -count=1 -v ./...
+
+production-e2e:
+	cd e2e && go test -count=1 -run TestProductionBinary_EstateMuseTrialPath -v ./...
