@@ -16,13 +16,13 @@ go 1.23.0
 
 require (
 	github.com/soyaos/soyaos/pkg/artifact v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/auth v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/kernel v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/llmcall v0.1.0-alpha.1
+	github.com/soyaos/soyaos/pkg/auth v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/kernel v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/llmcall v0.1.0-alpha.2
 	github.com/soyaos/soyaos/pkg/openaicompat v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/soyapack v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/state v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/store v0.1.0-alpha.1
+	github.com/soyaos/soyaos/pkg/soyapack v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/state v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/store v0.1.0-alpha.2
 	github.com/xuri/excelize/v2 v2.9.1
 )
 
@@ -35,7 +35,6 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/richardlehane/mscfb v1.0.6 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
