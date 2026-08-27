@@ -1,0 +1,22 @@
+{
+  "schema_version": "estate-muse-technical-baseline.v1",
+  "recorded_at": "2026-08-27T13:49:33+00:00",
+  "repository_commit": "9fc4c9aef4f6936da85a59bb1b4ed1f10027b385",
+  "working_tree": {
+    "clean": true,
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "production_trial_path": {
+    "test_name": "TestProductionBinary_EstateMuseTrialPath",
+    "command": "cd e2e && go test -count=1 -run ^TestProductionBinary_EstateMuseTrialPath$ -v ./...",
+    "external_model": "deterministic_local_mock",
+    "passed": true,
+    "asserted_contracts": [
+      "500_rows_under_300000_ms",
+      "per_row_action_under_60000_ms",
+      "xlsx_reopens",
+      "state_survives_process_restart",
+      "persisted_row_cannot_be_overridden"
+    ]
+  }
+}
