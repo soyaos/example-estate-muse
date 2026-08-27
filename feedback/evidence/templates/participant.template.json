@@ -1,0 +1,74 @@
+{
+  "schema_version": "estate-muse-participant.v1",
+  "participant_id": "EM-01",
+  "profile": "公众号作者",
+  "trial_started_on": "2026-09-01",
+  "trial_ended_on": "2026-09-14",
+  "attestation": {
+    "real_human": true,
+    "real_estate_content_creator": true,
+    "fourteen_day_trial_consented": true,
+    "anonymous_feedback_confirmed": true,
+    "coordinator_verified": true,
+    "verified_on": "2026-09-14"
+  },
+  "opaque_evidence_ids": ["EV-EM01-SESSION-SET"],
+  "sessions": [
+    {
+      "session_id": "EM-01-S01",
+      "occurred_on": "2026-09-01",
+      "target_platform": "公众号",
+      "xlsx": {
+        "row_count": 500,
+        "duration_ms": 120000,
+        "desktop_app": "Microsoft Excel",
+        "opened": true,
+        "edited_successfully": true,
+        "chinese_ok": true,
+        "filters_ok": true,
+        "freeze_header_ok": true
+      },
+      "actions": [
+        {
+          "action": "generate_post",
+          "row_ref": "row-17",
+          "duration_ms": 30000,
+          "success": true,
+          "used_persisted_row": true
+        }
+      ]
+    },
+    {
+      "session_id": "EM-01-S02",
+      "occurred_on": "2026-09-07",
+      "target_platform": "视频号",
+      "actions": [
+        {
+          "action": "generate_video",
+          "row_ref": "row-28",
+          "duration_ms": 32000,
+          "success": true,
+          "used_persisted_row": true
+        }
+      ]
+    },
+    {
+      "session_id": "EM-01-S03",
+      "occurred_on": "2026-09-14",
+      "target_platform": "公众号",
+      "actions": []
+    }
+  ],
+  "quality_summary": {
+    "sampled_rows": 60,
+    "grade_counts": {"A": 20, "B": 30, "C": 10},
+    "duplicate_groups_count": 3,
+    "omitted_angles_count": 2,
+    "originality_samples": 10,
+    "originality_warning_accurate_count": 7,
+    "originality_false_positive_count": 2,
+    "originality_false_negative_count": 1,
+    "final_outcome": "修改后使用",
+    "confirmed_anonymous_quote": "请替换为作者本人确认过的匿名短句，不能由 AI 代写。"
+  }
+}

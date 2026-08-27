@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soyaos.ai/schemas/estate-muse-technical-baseline.v1.json",
+  "title": "EstateMuse automatic technical baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "recorded_at", "repository_commit", "working_tree", "production_trial_path"],
+  "properties": {
+    "schema_version": {"const": "estate-muse-technical-baseline.v1"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "working_tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clean", "diff_sha256"],
+      "properties": {
+        "clean": {"const": true},
+        "diff_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "production_trial_path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test_name", "command", "external_model", "passed", "asserted_contracts"],
+      "properties": {
+        "test_name": {"const": "TestProductionBinary_EstateMuseTrialPath"},
+        "command": {"type": "string"},
+        "external_model": {"const": "deterministic_local_mock"},
+        "passed": {"const": true},
+        "asserted_contracts": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}

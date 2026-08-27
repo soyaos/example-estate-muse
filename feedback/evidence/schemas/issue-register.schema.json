@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soyaos.ai/schemas/estate-muse-issue-register.v1.json",
+  "title": "EstateMuse trial issue register",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "review_completed", "issues"],
+  "properties": {
+    "schema_version": {"const": "estate-muse-issue-register.v1"},
+    "review_completed": {"const": true},
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "status", "linear_issue"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^EM-P[0-2]-\\d{3}$"},
+          "severity": {"enum": ["P0", "P1", "P2"]},
+          "status": {"enum": ["fixed_and_retested", "tracked"]},
+          "linear_issue": {"type": "string", "pattern": "^APP-\\d+$"}
+        }
+      }
+    }
+  }
+}

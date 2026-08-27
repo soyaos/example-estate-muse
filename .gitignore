@@ -24,6 +24,8 @@
 *.swp
 *.swo
 .DS_Store
+__pycache__/
+*.py[cod]
 
 # Local secrets (never commit)
 .env

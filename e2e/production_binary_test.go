@@ -68,19 +68,29 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 	assertWorkbookRows(t, xlsxPath, 500)
 
 	actionStarted := time.Now()
-	status, body := postProductionAction(t, gatewayAddr, "伪造标题")
+	status, body := postProductionAction(t, gatewayAddr, "generate_post", "伪造标题")
 	if status != http.StatusOK {
-		t.Fatalf("first action status=%d body=%s", status, body)
+		t.Fatalf("generate_post status=%d body=%s", status, body)
 	}
 	if elapsed := time.Since(actionStarted); elapsed > time.Minute {
-		t.Fatalf("first action took %s, want <= 60s", elapsed)
+		t.Fatalf("generate_post took %s, want <= 60s", elapsed)
+	}
+	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 017")
+
+	videoStarted := time.Now()
+	status, body = postProductionAction(t, gatewayAddr, "generate_video", "短视频伪造标题")
+	if status != http.StatusOK {
+		t.Fatalf("generate_video status=%d body=%s", status, body)
+	}
+	if elapsed := time.Since(videoStarted); elapsed > time.Minute {
+		t.Fatalf("generate_video took %s, want <= 60s", elapsed)
 	}
 	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 017")
 
 	process.stop(t)
 	process = startSoyaOSProcess(t, bin, dataDir, gatewayAddr, rpcAddr, env)
 
-	status, body = postProductionAction(t, gatewayAddr, "重启后伪造标题")
+	status, body = postProductionAction(t, gatewayAddr, "generate_post", "重启后伪造标题")
 	if status != http.StatusOK {
 		t.Fatalf("post-restart action status=%d body=%s", status, body)
 	}
@@ -131,6 +141,11 @@ func newProductionMock(t *testing.T) *productionMock {
 			m.action = append(m.action, user)
 			m.mu.Unlock()
 			response = "# 生产链路测试图文\n\nACTION_OK"
+		case strings.Contains(system, "# generate_video"):
+			m.mu.Lock()
+			m.action = append(m.action, user)
+			m.mu.Unlock()
+			response = "# 生产链路测试短视频\n\nACTION_OK"
 		}
 		writeSSE(t, w, response)
 	}))
@@ -267,14 +282,14 @@ func waitForHealth(t *testing.T, url string, process *runningSoyaOS) {
 	t.Fatalf("soyaos health timed out: %s\n%s", url, process.logs.String())
 }
 
-func postProductionAction(t *testing.T, gatewayAddr, callerTitle string) (int, string) {
+func postProductionAction(t *testing.T, gatewayAddr, action, callerTitle string) (int, string) {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
 		"row_id":  "row-17",
 		"payload": map[string]any{"title": callerTitle, "option": "production-e2e"},
 	})
 	req, _ := http.NewRequest(http.MethodPost,
-		"http://"+gatewayAddr+"/v1/agents/estate-muse/actions/generate_post",
+		"http://"+gatewayAddr+"/v1/agents/estate-muse/actions/"+action,
 		bytes.NewReader(body),
 	)
 	req.Header.Set("Authorization", "Bearer sk-soya-dev-local")
