@@ -1,10 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://soyaos.ai/schemas/estate-muse-participant.v1.json",
-  "title": "EstateMuse anonymous participant evidence",
+  "$id": "https://soyaos.ai/schemas/estate-muse-participant.v2.json",
+  "title": "EstateMuse anonymous owner self-trial evidence (scope decided 2026-09-09)",
   "type": "object",
   "required": [
     "schema_version",
+    "trial_scope",
+    "scope_decided_on",
     "participant_id",
     "profile",
     "trial_started_on",
@@ -16,23 +18,26 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "estate-muse-participant.v1"},
-    "participant_id": {"pattern": "^EM-0[1-5]$"},
+    "schema_version": {"const": "estate-muse-participant.v2"},
+    "trial_scope": {"const": "owner_self_trial"},
+    "scope_decided_on": {"const": "2026-09-09"},
+    "participant_id": {"const": "EM-01"},
     "profile": {
-      "enum": ["公众号作者", "视频号作者", "小红书作者", "抖音作者", "经纪公司内容运营", "房产内容编辑"]
+      "enum": ["本人真实需求试用", "公众号作者", "视频号作者", "小红书作者", "抖音作者", "经纪公司内容运营", "房产内容编辑"]
     },
     "trial_started_on": {"type": "string", "format": "date"},
     "trial_ended_on": {"type": "string", "format": "date"},
     "attestation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["real_human", "real_estate_content_creator", "fourteen_day_trial_consented", "anonymous_feedback_confirmed", "coordinator_verified", "verified_on"],
+      "required": ["real_human", "project_owner", "real_personal_need", "fourteen_day_trial_consented", "anonymous_feedback_confirmed", "owner_confirmed", "verified_on"],
       "properties": {
         "real_human": {"const": true},
-        "real_estate_content_creator": {"const": true},
+        "project_owner": {"const": true},
+        "real_personal_need": {"const": true},
         "fourteen_day_trial_consented": {"const": true},
         "anonymous_feedback_confirmed": {"const": true},
-        "coordinator_verified": {"const": true},
+        "owner_confirmed": {"const": true},
         "verified_on": {"type": "string", "format": "date"}
       }
     },
@@ -54,7 +59,7 @@
       "additionalProperties": false,
       "required": ["session_id", "occurred_on", "target_platform", "actions"],
       "properties": {
-        "session_id": {"type": "string", "pattern": "^EM-0[1-5]-S\\d{2,3}$"},
+        "session_id": {"type": "string", "pattern": "^EM-01-S\\d{2,3}$"},
         "occurred_on": {"type": "string", "format": "date"},
         "target_platform": {"enum": ["公众号", "视频号", "小红书", "抖音", "其他"]},
         "xlsx": {"$ref": "#/$defs/xlsx"},

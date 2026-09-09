@@ -22,11 +22,14 @@ import tempfile
 from typing import Any, Iterable
 
 
-PARTICIPANT_SCHEMA = "estate-muse-participant.v1"
+PARTICIPANT_SCHEMA = "estate-muse-participant.v2"
+TRIAL_SCOPE = "owner_self_trial"
+SCOPE_DECIDED_ON = "2026-09-09"
 TECHNICAL_SCHEMA = "estate-muse-technical-baseline.v1"
 ISSUE_SCHEMA = "estate-muse-issue-register.v1"
-EXPECTED_PARTICIPANTS = tuple(f"EM-{index:02d}" for index in range(1, 6))
+EXPECTED_PARTICIPANTS = ("EM-01",)
 PROFILE_VALUES = {
+    "本人真实需求试用",
     "公众号作者",
     "视频号作者",
     "小红书作者",
@@ -74,7 +77,7 @@ SENSITIVE_PATTERNS = {
 }
 OPAQUE_EVIDENCE_ID = re.compile(r"^EV-[A-Z0-9][A-Z0-9-]{5,63}$")
 ROW_REFERENCE = re.compile(r"^(?:row-[A-Za-z0-9_-]{1,64}|sha256:[0-9a-f]{64})$")
-SESSION_ID = re.compile(r"^EM-0[1-5]-S\d{2,3}$")
+SESSION_ID = re.compile(r"^EM-01-S\d{2,3}$")
 LINEAR_ISSUE = re.compile(r"^APP-\d+$")
 
 
@@ -302,6 +305,8 @@ def _validate_participant(
         data,
         {
             "schema_version",
+            "trial_scope",
+            "scope_decided_on",
             "participant_id",
             "profile",
             "trial_started_on",
@@ -316,6 +321,10 @@ def _validate_participant(
     )
     if data.get("schema_version") != PARTICIPANT_SCHEMA:
         result.add(f"{prefix}.schema_version: must be {PARTICIPANT_SCHEMA}")
+    if data.get("trial_scope") != TRIAL_SCOPE:
+        result.add(f"{prefix}.trial_scope: must be {TRIAL_SCOPE}")
+    if data.get("scope_decided_on") != SCOPE_DECIDED_ON:
+        result.add(f"{prefix}.scope_decided_on: must be {SCOPE_DECIDED_ON}")
     participant_id = data.get("participant_id")
     if participant_id != expected_id:
         result.add(f"{prefix}.participant_id: must match filename and equal {expected_id}")
@@ -330,10 +339,11 @@ def _validate_participant(
             attestation,
             {
                 "real_human",
-                "real_estate_content_creator",
+                "project_owner",
+                "real_personal_need",
                 "fourteen_day_trial_consented",
                 "anonymous_feedback_confirmed",
-                "coordinator_verified",
+                "owner_confirmed",
                 "verified_on",
             },
             f"{prefix}.attestation",
@@ -341,10 +351,11 @@ def _validate_participant(
         )
         for key in (
             "real_human",
-            "real_estate_content_creator",
+            "project_owner",
+            "real_personal_need",
             "fourteen_day_trial_consented",
             "anonymous_feedback_confirmed",
-            "coordinator_verified",
+            "owner_confirmed",
         ):
             _require_bool(attestation, key, f"{prefix}.attestation", result)
         _parse_date(attestation.get("verified_on"), f"{prefix}.attestation.verified_on", result)
@@ -663,7 +674,9 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "",
         f"- 报告日期：{as_of}",
         "- 证据目录：`feedback/evidence`",
-        f"- 真人参与者：{len(result.participants)} / 5",
+        f"- 验收范围：{TRIAL_SCOPE}（本人 EM-01 单人真实需求试用）",
+        f"- 范围决定日期：{SCOPE_DECIDED_ON}；替代此前 5 名外部作者招募要求，不代表外部用户验证。",
+        f"- 真人参与者：{len(result.participants)} / 1",
         f"- 会话总数：{total_sessions}",
         f"- 自动生产链路：{'通过' if technical_passed else '未通过或缺失'}",
         "",
@@ -671,8 +684,8 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "",
         "| 指标 | 结果 |",
         "| --- | --- |",
-        f"| 5 名真实房产作者 × 至少 14 天 | {'通过' if len(result.participants) == 5 and result.passed else '未满足'} |",
-        f"| 每人至少 3 次使用、一次 500 行 XLSX、一次逐行 Action | {'通过' if result.passed else '未满足'} |",
+        f"| 本人 EM-01 × 至少 14 天 | {'通过' if len(result.participants) == 1 and result.passed else '未满足'} |",
+        f"| 至少 3 次使用、一次 500 行 XLSX、全期覆盖图文和视频 Action | {'通过' if result.passed else '未满足'} |",
         f"| 500 行生成 ≤ 300000 ms | p50 {_percentile(all_xlsx, 0.50)}；p95 {_percentile(all_xlsx, 0.95)} |",
         f"| 图文/视频 Action ≤ 60000 ms | p50 {_percentile(all_actions, 0.50)}；p95 {_percentile(all_actions, 0.95)} |",
         f"| 跨进程重启状态保留 | {'通过' if technical_passed else '未满足'} |",
@@ -689,7 +702,7 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
     if summaries:
         lines.extend(summaries)
     else:
-        lines.extend(["尚无真实作者反馈；不生成替代性评价。", ""])
+        lines.extend(["尚无本人真实试用反馈；不生成替代性评价。", ""])
     lines.extend([
         "## P0 / P1 / P2",
         "",
@@ -707,7 +720,7 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "python3 feedback/acceptance.py verify",
         "```",
         "",
-        "只有该命令返回 0 时，APP-1701 和 APP-506 才具备关闭条件。自动测试通过不能替代 5 名真人的两周试用。",
+        "只有该命令返回 0 时，APP-1701 和 APP-506 才具备关闭条件。自动测试通过不能替代本人两周真实试用；此结论不覆盖外部用户验证。",
         "",
     ])
     return "\n".join(lines)

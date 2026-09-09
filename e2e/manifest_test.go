@@ -83,3 +83,20 @@ func TestManifest_ExposesVirtualModelID(t *testing.T) {
 		t.Fatalf("expose.virtual_model_id missing or wrong: %+v", m.Expose)
 	}
 }
+
+func TestManifest_IndexedTableContract(t *testing.T) {
+	m := loadManifest(t)
+	cfg := m.Prompt.IndexedTable
+	if cfg == nil {
+		t.Fatal("production pack must opt into indexed table validation")
+	}
+	if cfg.TargetRows != 500 || cfg.CandidateRows != 800 || cfg.TimeoutSeconds != 300 || cfg.MaxRepairs != 1 || cfg.BatchSize != 100 || cfg.MaxConcurrency != 8 || len(cfg.BatchValues) != 8 || cfg.BatchColumn != 1 {
+		t.Fatalf("unexpected indexed table limits: %+v", cfg)
+	}
+	if len(cfg.ColumnRules) != 6 || cfg.ColumnRules[0].Suffix != "？" || cfg.ColumnRules[3].Prefix != "拍摄前需核实：" {
+		t.Fatal("missing pre-persistence editorial column rules")
+	}
+	if cfg.SheetName != "Topics" || len(cfg.Columns) != 6 {
+		t.Fatalf("unexpected workbook layout: %+v", cfg)
+	}
+}

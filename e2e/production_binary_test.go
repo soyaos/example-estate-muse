@@ -31,7 +31,11 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 	soyaRoot := findSoyaOSRoot(t)
 	testRoot := t.TempDir()
 	bin := filepath.Join(testRoot, "soyaos")
-	runCommand(t, soyaRoot, nil, "go", "build", "-o", bin, "./cmd/soyaos")
+	// Cold toolchain builds on a loaded machine need a separate budget.
+	// This does not relax the real 5-minute workbook generation assertion.
+	// The E2E module may run with GOWORK=off; the sibling binary deliberately
+	// builds its real multi-module workspace, independent of the parent's env.
+	runCommandWithTimeout(t, 10*time.Minute, soyaRoot, []string{"GOWORK=" + filepath.Join(soyaRoot, "go.work")}, "go", "build", "-p", "1", "-o", bin, "./cmd/soyaos")
 
 	packCopy := filepath.Join(testRoot, "estate-muse-pack")
 	copyPackTree(t, packDir(t), packCopy)
@@ -59,6 +63,8 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 		"--listen", "http://"+gatewayAddr,
 		"--key", "sk-soya-dev-local",
 		"--artifact", "xlsx",
+		"--max-tokens", "65536",
+		"--expected-rows", "500",
 		"--schema", "topics.v1",
 		"--output", xlsxPath,
 	)
@@ -66,6 +72,30 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 		t.Fatalf("500-row generation took %s, want <= 5m", elapsed)
 	}
 	assertWorkbookRows(t, xlsxPath, 500)
+
+	// A rejected selection must not replace the previous saved workbook rows.
+	mock.mu.Lock()
+	mock.rejectSelection = true
+	mock.mu.Unlock()
+	requestBody := strings.NewReader(`{"model":"soya:estate-muse","messages":[{"role":"user","content":"test rejected replacement"}]}`)
+	request, err := http.NewRequest(http.MethodPost, "http://"+gatewayAddr+"/v1/chat/completions", requestBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer sk-soya-dev-local")
+	request.Header.Set("Content-Type", "application/json")
+	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	if response.StatusCode == http.StatusOK {
+		t.Fatal("499-index selection unexpectedly succeeded")
+	}
+	mock.mu.Lock()
+	mock.rejectSelection = false
+	mock.mu.Unlock()
 
 	actionStarted := time.Now()
 	status, body := postProductionAction(t, gatewayAddr, "generate_post", "伪造标题")
@@ -75,7 +105,7 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 	if elapsed := time.Since(actionStarted); elapsed > time.Minute {
 		t.Fatalf("generate_post took %s, want <= 60s", elapsed)
 	}
-	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 017")
+	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 003")
 
 	videoStarted := time.Now()
 	status, body = postProductionAction(t, gatewayAddr, "generate_video", "短视频伪造标题")
@@ -85,7 +115,7 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 	if elapsed := time.Since(videoStarted); elapsed > time.Minute {
 		t.Fatalf("generate_video took %s, want <= 60s", elapsed)
 	}
-	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 017")
+	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 003")
 
 	process.stop(t)
 	process = startSoyaOSProcess(t, bin, dataDir, gatewayAddr, rpcAddr, env)
@@ -94,13 +124,14 @@ func TestProductionBinary_EstateMuseTrialPath(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("post-restart action status=%d body=%s", status, body)
 	}
-	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 017")
+	assertSavedRowReachedUpstream(t, mock.lastActionPayload(), "选题 003")
 }
 
 type productionMock struct {
-	server *httptest.Server
-	mu     sync.Mutex
-	action []string
+	server          *httptest.Server
+	mu              sync.Mutex
+	action          []string
+	rejectSelection bool
 }
 
 func newProductionMock(t *testing.T) *productionMock {
@@ -133,19 +164,48 @@ func newProductionMock(t *testing.T) *productionMock {
 		}
 
 		response := `{"stage":"ok"}`
+		m.mu.Lock()
+		reject := m.rejectSelection
+		m.mu.Unlock()
 		switch {
+		case strings.Contains(system, "# expand"):
+			var batch struct {
+				TargetCount int    `json:"target_count"`
+				BatchIndex  int    `json:"batch_index"`
+				Partition   string `json:"partition_value"`
+			}
+			if err := json.Unmarshal([]byte(user), &batch); err != nil || batch.TargetCount < 1 || batch.BatchIndex < 1 {
+				http.Error(w, "invalid batch envelope", http.StatusBadRequest)
+				return
+			}
+			response = productionCandidates(t, (batch.BatchIndex-1)*100+1, batch.TargetCount, batch.Partition)
+			if reject {
+				response = strings.ReplaceAll(response, "选题", "不可持久化的失败候选")
+			}
 		case strings.Contains(system, "# dedupe"):
-			response = productionSnapshot(t)
+			count := 500
+			if reject {
+				count = 499
+			}
+			indices := make([]int, count)
+			for i := range indices {
+				indices[i] = i + 1
+			}
+			body, err := json.Marshal(map[string]any{"indices": indices})
+			if err != nil {
+				t.Fatal(err)
+			}
+			response = string(body)
 		case strings.Contains(system, "# generate_post"):
 			m.mu.Lock()
 			m.action = append(m.action, user)
 			m.mu.Unlock()
-			response = "# 生产链路测试图文\n\nACTION_OK"
+			response = "# 生产链路测试图文\n\nACTION_OK\n" + strings.Repeat("核对清单与现场条件。", 80)
 		case strings.Contains(system, "# generate_video"):
 			m.mu.Lock()
 			m.action = append(m.action, user)
 			m.mu.Unlock()
-			response = "# 生产链路测试短视频\n\nACTION_OK"
+			response = "# 生产链路测试短视频\n\n## 口播全文\n" + strings.Repeat("核对清单与现场条件。", 10) + "\n## 待核实\nACTION_OK"
 		}
 		writeSSE(t, w, response)
 	}))
@@ -162,34 +222,20 @@ func (m *productionMock) lastActionPayload() string {
 	return m.action[len(m.action)-1]
 }
 
-func productionSnapshot(t *testing.T) string {
+func productionCandidates(t *testing.T, start, count int, dimension string) string {
 	t.Helper()
-	rows := make([][]any, 0, 500)
-	for i := 1; i <= 500; i++ {
+	rows := make([][]any, 0, count)
+	for i := start; i < start+count; i++ {
 		rows = append(rows, []any{
-			fmt.Sprintf("选题 %03d：亚运村房产观察", i),
-			"market",
+			fmt.Sprintf("选题 %03d：亚运村看房应确认什么？", i),
+			dimension,
 			"数据",
-			fmt.Sprintf("第 %03d 个真实钩子", i),
+			fmt.Sprintf("拍摄前需核实：第 %03d 个观察条件", i),
 			"med",
 			"图文",
 		})
 	}
-	payload := map[string]any{"sheets": []any{map[string]any{
-		"name":          "Topics",
-		"freeze_header": true,
-		"per_row_action_url": "http://127.0.0.1:7474/v1/agents/estate-muse/actions/" +
-			"generate_post?row_id={row_id}",
-		"columns": []any{
-			map[string]any{"header": "标题", "width": 42},
-			map[string]any{"header": "维度", "width": 12},
-			map[string]any{"header": "切面", "width": 10},
-			map[string]any{"header": "钩子", "width": 36},
-			map[string]any{"header": "难度", "width": 8},
-			map[string]any{"header": "建议产物", "width": 14},
-		},
-		"rows": rows,
-	}}}
+	payload := map[string]any{"rows": rows}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal production snapshot: %v", err)
@@ -286,7 +332,7 @@ func postProductionAction(t *testing.T, gatewayAddr, action, callerTitle string)
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
 		"row_id":  "row-17",
-		"payload": map[string]any{"title": callerTitle, "option": "production-e2e"},
+		"payload": map[string]any{"title": callerTitle, "original_request": "篡改原始需求", "option": "production-e2e"},
 	})
 	req, _ := http.NewRequest(http.MethodPost,
 		"http://"+gatewayAddr+"/v1/agents/estate-muse/actions/"+action,
@@ -311,6 +357,9 @@ func assertSavedRowReachedUpstream(t *testing.T, payload, wantTitle string) {
 	}
 	if strings.Contains(payload, "伪造标题") {
 		t.Fatalf("caller-supplied title overrode persisted row: %s", payload)
+	}
+	if !strings.Contains(payload, "杭州亚运村二手房 500 条选题") || strings.Contains(payload, "篡改原始需求") {
+		t.Fatalf("original request not preserved in action: %s", payload)
 	}
 }
 
@@ -385,13 +434,21 @@ func copyPackTree(t *testing.T, src, dst string) {
 
 func runCommand(t *testing.T, dir string, env []string, name string, args ...string) string {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	return runCommandWithTimeout(t, 2*time.Minute, dir, env, name, args...)
+}
+
+func runCommandWithTimeout(t *testing.T, timeout time.Duration, dir string, env []string, name string, args ...string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), append([]string{"GOTOOLCHAIN=go1.23.12"}, env...)...)
 	raw, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() != nil {
+			t.Fatalf("%s %s: command deadline %s exceeded: %v\n%s", name, strings.Join(args, " "), timeout, ctx.Err(), raw)
+		}
 		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, raw)
 	}
 	return string(raw)

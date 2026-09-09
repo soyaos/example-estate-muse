@@ -9,7 +9,7 @@
 > breaking change，请勿将当前 alpha 版本作为生产依赖。**
 
 > *One sentence in. Within five minutes, a 500-row Excel of editorial topic
-> ideas comes out. Any row can generate a WeChat post or short-video script
+> ideas comes out. Any row can generate a platform-appropriate post or short-video script
 > in under one minute.*
 
 EstateMuse is the canonical SoyaPack v0 reference for the
@@ -24,6 +24,27 @@ parts that distinguish a stateful Agent from a one-shot prompt:
 
 This repository is a declarative SoyaPack—YAML, prompts, templates, examples,
 and E2E tests—not a standalone Go application.
+
+The five-minute statement above is an acceptance target, not a verified real-model
+performance claim. The indexed-table workflow requests 800 candidate rows, selects
+500 one-based indices, and assembles the workbook in code without rewriting rows.
+Candidates are requested in eight batches (at most 100 rows each), with at most
+eight calls in flight. Each batch is constrained to its declared dimension;
+batch order is preserved before cross-batch deduplication. Candidates are then
+interleaved by dimension, and the final selection must retain at least 50 rows
+from each of the eight dimensions; a prefix-only selection cannot silently
+discard later dimensions.
+It allows one deficit repair and one selection repair within a shared 300-second
+deadline. Invalid results fail before replacing saved completion, artifact, or
+row state; the CLI independently checks 500 rows before writing the XLSX file.
+Column rules reject invalid enums, missing question/verification markers, and
+configured unsafe phrases before selection and persistence; deficits are repaired
+within the same deadline. These checks do not prove factual or semantic quality.
+Run `python3 feedback/review_topics.py path/to/topics.xlsx` for an independent
+deterministic preflight, then review the actual topics before publishing anything.
+Per-row actions validate actual text length (the spoken section for video), allow
+one bounded correction, and enforce the declared 60-second timeout. This does not
+verify recording duration or the truth of factual claims.
 
 ## What works today
 
@@ -93,13 +114,23 @@ soyaos agent deploy \
 mkdir -p ./dist/trial
 
 time soyaos agent invoke estate-muse \
-  '杭州亚运村二手房 500 条选题' \
+  '面向首次购房家庭，制作杭州二手房小红书看房检查选题500条；没有提供市场证据，不编造售价、成交、政策、案例或收益承诺。' \
   --listen http://127.0.0.1:7474 \
   --key sk-soya-dev-local \
+  --max-tokens 65536 \
   --artifact xlsx \
+  --expected-rows 500 \
   --schema topics.v1 \
   --output ./dist/trial/topics.xlsx
 ```
+
+The example output budget must be supported by your configured model. The
+sample brief is illustrative, not the owner's private trial input. Supply the
+complete real brief, including any budget and property-type constraints. The
+explicit row-count gate rejects anything other than 500 non-empty primary-sheet
+rows before publishing a new file; model completion alone is not acceptance.
+Missing evidence for market claims must remain a research question, not a
+fabricated transaction, quotation, policy or customer story.
 
 Open `dist/trial/topics.xlsx` in Excel, WPS, or Numbers. Confirm that the
 `Topics` sheet has one header row plus 500 data rows, Chinese text displays
@@ -121,7 +152,7 @@ curl http://127.0.0.1:7474/v1/agents/estate-muse/actions/generate_post \
 ```
 
 SoyaOS merges action-specific options such as `city` with the saved row. The
-saved title, dimension, angle, and hook override same-named caller fields, so
+saved title, dimension, angle, hook, and complete original request override same-named caller fields, so
 an action cannot silently replace the original workbook context.
 
 Use `generate_video` instead of `generate_post` to produce the short-video
@@ -135,7 +166,7 @@ script. Each action manifest has a 60-second budget.
 4. Repeat the row-17 `curl` command.
 5. Confirm the action still uses row 17's original topic.
 
-For the two-week author trial, follow the beginner-friendly
+For the owner-only two-week trial (scope changed on 2026-09-09), follow the beginner-friendly
 [Chinese trial guide](./TRIAL_GUIDE.zh-CN.md) and create one feedback file per
 session from [the template](./feedback/session-template.md).
 
@@ -224,8 +255,8 @@ does not pin a provider, so the operator selects one with:
 | `SOYA_MODEL_DEFAULT` | Provider model ID | `gpt-4o` |
 
 For a cheap smoke test, use a smaller model. For the two-week editorial trial,
-use one stable Chinese-capable model for the entire cohort so model changes do
-not contaminate author feedback.
+use one stable Chinese-capable model throughout the owner's trial so model changes do
+not contaminate feedback.
 
 ## Per-row security and state
 
@@ -244,7 +275,9 @@ not contaminate author feedback.
 - The manifest declares `tool.originality_check`, but current output quality
   relies on the prompt's self-review until runtime tool orchestration lands.
 - Real editorial quality, originality, and usefulness still require the
-  five-author, two-week trial tracked separately from the technical E2E.
+  owner-only, two-week trial tracked separately from the technical E2E. External
+  author recruitment was removed by the user's scope decision on 2026-09-09;
+  the 14-day and minimum three-session requirements remain.
 - APIs, state schema, commands, and output contracts may change before release.
 
 ## Status
@@ -258,7 +291,7 @@ not contaminate author feedback.
 | Real post/video action under 60 seconds | Technically verified with deterministic model mock |
 | Automatic HTML companion rendering | Pending |
 | Runtime originality tool orchestration | Pending |
-| Five authors × two-week editorial acceptance | Pending human trial |
+| Owner EM-01 × two-week editorial acceptance | Pending real owner use; not external-user validation |
 
 ## License
 

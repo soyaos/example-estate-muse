@@ -17,10 +17,10 @@ go 1.23.0
 require (
 	github.com/soyaos/soyaos/pkg/artifact v0.1.0-alpha.1
 	github.com/soyaos/soyaos/pkg/auth v0.1.0-alpha.2
-	github.com/soyaos/soyaos/pkg/kernel v0.1.0-alpha.2
-	github.com/soyaos/soyaos/pkg/llmcall v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/kernel v0.1.0-alpha.4
+	github.com/soyaos/soyaos/pkg/llmcall v0.1.0-alpha.4
 	github.com/soyaos/soyaos/pkg/openaicompat v0.1.0-alpha.1
-	github.com/soyaos/soyaos/pkg/soyapack v0.1.0-alpha.2
+	github.com/soyaos/soyaos/pkg/soyapack v0.1.0-alpha.4
 	github.com/soyaos/soyaos/pkg/state v0.1.0-alpha.2
 	github.com/soyaos/soyaos/pkg/store v0.1.0-alpha.2
 	github.com/xuri/excelize/v2 v2.9.1
