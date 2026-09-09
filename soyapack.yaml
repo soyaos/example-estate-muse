@@ -24,30 +24,56 @@ inputs:
   - name: seed
     type: string
     optional: false   # the one-sentence brief, e.g. "杭州亚运村二手房 500 条选题"
-  - name: target_count
-    type: number
-    optional: true    # default 500; lower this for smoke tests
   - name: city_hint
     type: string
     optional: true
 
 # 3-step prompt chain (APP-550 Phase B):
 #
-#   collect → turn the seed into 60 raw candidate themes (broad coverage,
+#   collect → preserve the full brief and produce 64 candidate themes (broad coverage,
 #             every facet of the target market)
-#   expand  → fan each candidate into ~9 concrete topic angles so the
-#             generated workbook averages 500 rows total
-#   dedupe  → cluster near-duplicates, drop the obvious repeats, and emit
-#             the final guide.v1 sheet structure
+#   expand  → emit 800 candidate rows in enforced dimension partitions, preserving
+#             the platform, audience and factual boundaries
+#   dedupe  → select 500 candidate indices; the kernel assembles topics.v1
+#             without rewriting any selected row
 #
-# Each stage feeds its full response into the next; only the final
+# Each later stage receives both the original request and the previous
+# stage output; only the final
 # stream is returned to the caller. The chat surface (POST
 # /v1/chat/completions, model=soya:estate-muse) is what produces the
-# initial xlsx. Per-row buttons live on the rendered HTML companion and
-# fire the actions block below.
+# initial xlsx. The CLI validates the actual row count with --expected-rows;
+# per-row actions are currently operator-invoked (HTML companion orchestration
+# is not yet wired, so prompts must not invent action URLs).
 prompt:
   scaffold: minimal-input-high-quality
   tools: [tool.originality_check]
+  indexed_table:
+    target_rows: 500
+    candidate_rows: 800
+    batch_size: 100
+    max_concurrency: 8
+    batch_column: 1
+    batch_values: [buy, hold, sell, market, policy, lifestyle, risk, compare]
+    min_per_partition: 50
+    columns: [标题, 维度, 切面, 钩子, 难度, 建议产物]
+    column_rules:
+      - column: 0
+        suffix: "？"
+        forbidden_substrings: [打火机, 点燃, 尾随, 确保增值, 稳赚, 保值保证, 实测分享]
+      - column: 1
+        allowed_values: [buy, hold, sell, market, policy, lifestyle, risk, compare]
+      - column: 2
+        allowed_values: [数据, 案例, 对比, 操作, 争议]
+      - column: 3
+        prefix: "拍摄前需核实："
+        forbidden_substrings: [打火机, 点燃, 尾随, 确保增值, 稳赚, 保值保证, 大功率电器同时开启]
+      - column: 4
+        allowed_values: [low, med, high]
+      - column: 5
+        allowed_values: [图文, 短视频, 图文+短视频]
+    sheet_name: Topics
+    max_repairs: 1
+    timeout_seconds: 300
   # prompt.upstream is intentionally omitted: EstateMuse benefits from a
   # stronger generalist model than the operator-level default. Set
   # SOYA_MODEL_NAME=gpt-4o (or pin via `prompt.upstream`) when deploying
@@ -81,11 +107,22 @@ actions:
     on: per_row
     handler: prompts/generate_post.md
     timeout: 60s
+    text_validation:
+      min_chars: 600
+      max_chars: 900
+      max_repairs: 1
+      forbidden_phrases: [根据相关规定, 根据法律规定, 法律要求必须, 确保增值, 几万, 几十万, 智商税]
     artifacts: [wechat_post]
   - id: generate_video
     on: per_row
     handler: prompts/generate_video.md
     timeout: 60s
+    text_validation:
+      section: 口播全文
+      min_chars: 60
+      max_chars: 130
+      max_repairs: 1
+      forbidden_phrases: [根据相关规定, 根据法律规定, 法律要求必须, 确保增值, 几万, 几十万, 智商税]
     artifacts: [video_script]
 
 # Stateful Agent: the 500-row workbook is kept under the agent's own

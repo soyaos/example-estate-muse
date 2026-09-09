@@ -20,16 +20,19 @@ def participant(index: int) -> dict:
     post_first = index % 2 == 1
     return {
         "schema_version": acceptance.PARTICIPANT_SCHEMA,
+        "trial_scope": acceptance.TRIAL_SCOPE,
+        "scope_decided_on": acceptance.SCOPE_DECIDED_ON,
         "participant_id": participant_id,
         "profile": "公众号作者",
         "trial_started_on": "2026-09-01",
         "trial_ended_on": "2026-09-14",
         "attestation": {
             "real_human": True,
-            "real_estate_content_creator": True,
+            "project_owner": True,
+            "real_personal_need": True,
             "fourteen_day_trial_consented": True,
             "anonymous_feedback_confirmed": True,
-            "coordinator_verified": True,
+            "owner_confirmed": True,
             "verified_on": "2026-09-14",
         },
         "opaque_evidence_ids": [f"EV-EM{index:02d}-TRIAL"],
@@ -106,7 +109,7 @@ class AcceptanceTests(unittest.TestCase):
         path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
     def write_complete_evidence(self) -> None:
-        for index in range(1, 6):
+        for index in range(1, 2):
             self.write_json(f"participants/EM-{index:02d}.json", participant(index))
         self.write_json("technical-baseline.json", {
             "schema_version": acceptance.TECHNICAL_SCHEMA,
@@ -141,14 +144,16 @@ class AcceptanceTests(unittest.TestCase):
         self.assertTrue(result.passed, result.errors)
         report = acceptance.render_report(result, self.root, "2026-09-14")
         self.assertIn("**PASS**", report)
-        self.assertIn("真人参与者：5 / 5", report)
+        self.assertIn("真人参与者：1 / 1", report)
+        self.assertIn("范围决定日期：2026-09-09", report)
+        self.assertIn("不代表外部用户验证", report)
         self.assertNotIn("sk-", report)
 
     def test_missing_participant_is_a_hard_blocker(self) -> None:
-        (self.root / "participants" / "EM-05.json").unlink()
+        (self.root / "participants" / "EM-01.json").unlink()
         result = acceptance.validate_evidence(self.root)
         self.assertFalse(result.passed)
-        self.assertTrue(any("EM-05.json: missing" in error for error in result.errors))
+        self.assertTrue(any("EM-01.json: missing" in error for error in result.errors))
 
     def test_fourteen_days_is_inclusive(self) -> None:
         data = participant(1)
@@ -202,7 +207,50 @@ class AcceptanceTests(unittest.TestCase):
         result = acceptance.validate_evidence(self.root)
         report = acceptance.render_report(result, self.root, "2026-08-27")
         self.assertIn("**BLOCKED**", report)
-        self.assertIn("尚无真实作者反馈；不生成替代性评价。", report)
+        self.assertIn("尚无本人真实试用反馈；不生成替代性评价。", report)
+
+    def test_extra_external_participant_cannot_change_owner_scope(self) -> None:
+        self.write_json("participants/EM-02.json", participant(2))
+        result = acceptance.validate_evidence(self.root)
+        self.assertTrue(any("unexpected participant files: EM-02.json" in error for error in result.errors))
+
+    def test_legacy_or_undecided_scope_is_rejected(self) -> None:
+        for field, value in (("schema_version", "estate-muse-participant.v1"),
+                             ("trial_scope", "external_authors"),
+                             ("scope_decided_on", "2026-09-08")):
+            with self.subTest(field=field):
+                data = participant(1)
+                data[field] = value
+                self.write_json("participants/EM-01.json", data)
+                result = acceptance.validate_evidence(self.root)
+                self.assertTrue(any(f".{field}: must be" in error for error in result.errors))
+
+    def test_owner_still_needs_both_action_types(self) -> None:
+        data = participant(1)
+        data["sessions"][1]["actions"] = []
+        self.write_json("participants/EM-01.json", data)
+        result = acceptance.validate_evidence(self.root)
+        self.assertTrue(any("no successful generate_video" in error for error in result.errors))
+
+    def test_owner_still_needs_three_sessions_and_500_rows(self) -> None:
+        for change, expected in (("sessions", "at least 3 real-use sessions"),
+                                 ("rows", "row_count: must be at least 500")):
+            with self.subTest(change=change):
+                data = participant(1)
+                if change == "sessions":
+                    data["sessions"].pop()
+                else:
+                    data["sessions"][0]["xlsx"]["row_count"] = 499
+                self.write_json("participants/EM-01.json", data)
+                result = acceptance.validate_evidence(self.root)
+                self.assertTrue(any(expected in error for error in result.errors))
+
+    def test_unfilled_template_is_not_real_evidence(self) -> None:
+        template = json.loads((MODULE_PATH.parent / "evidence/templates/participant.template.json").read_text())
+        self.write_json("participants/EM-01.json", template)
+        result = acceptance.validate_evidence(self.root)
+        self.assertFalse(result.passed)
+        self.assertTrue(any("owner_confirmed: must be true" in error for error in result.errors))
 
     def test_malformed_dates_block_without_breaking_progress_report(self) -> None:
         data = participant(1)

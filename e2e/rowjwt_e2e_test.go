@@ -59,8 +59,13 @@ const (
 	actionPost  = "generate_post"
 	actionVideo = "generate_video"
 	mockModel   = "mock-writer-model"
-	mockAnswer  = "【MOCK】亚运村次新房图文已生成"
 )
+
+// Valid for both declared text contracts so auth assertions exercise auth,
+// without disabling the production pack's output validation.
+var mockAnswer = strings.Repeat("【MOCK】亚运村次新房图文已生成。", 40) +
+	"\n## 口播全文\n" + strings.Repeat("请核实房源条件并记录需求。", 7) +
+	"\n## 待核实事项\n测试文本，不代表真实内容。"
 
 // upstreamCapture records every chat/completions body the mock upstream
 // receives, so tests can assert (a) the real prompt file content reached
