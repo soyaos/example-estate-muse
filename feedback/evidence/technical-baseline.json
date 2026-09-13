@@ -1,10 +1,10 @@
 {
   "schema_version": "estate-muse-technical-baseline.v1",
-  "recorded_at": "2026-09-13T02:50:01+00:00",
-  "repository_commit": "7b283221e377ea9520e0cffb83cdbbdd3de4c28b",
+  "recorded_at": "2026-09-13T03:09:47+00:00",
+  "repository_commit": "957d530952d58439512c839af9bae47949c3cf3b",
   "working_tree": {
-    "clean": false,
-    "diff_sha256": "8b0e7c20399e7d6e813a814f34e7077dd29ba9720c000e5428c0d7b34ddb0cb5"
+    "clean": true,
+    "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "production_trial_path": {
     "test_name": "TestProductionBinary_EstateMuseTrialPath",

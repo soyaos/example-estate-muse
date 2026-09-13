@@ -1,6 +1,6 @@
 # EstateMuse v0.1.0 Alpha 试用验收报告
 
-> 结论：**BLOCKED**。本报告仅汇总匿名结构化证据，不包含身份、联系方式、原始输入或生成内容正文。
+> 结论：**PASS**。本报告仅汇总匿名结构化证据，不包含身份、联系方式、原始输入或生成内容正文。
 
 - 报告日期：2026-09-12
 - 证据目录：`feedback/evidence`
@@ -49,7 +49,7 @@
 
 ## 阻塞项
 
-- [ ] feedback/evidence/technical-baseline.json.working_tree.clean: must be true
+- [x] 无阻塞项
 
 ## 复现命令
 
