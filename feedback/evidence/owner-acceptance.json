@@ -1,0 +1,21 @@
+{
+  "schema_version": "estate-muse-owner-acceptance.v1",
+  "participant_id": "EM-01",
+  "trial_scope": "owner_self_trial",
+  "linear_issue": "APP-1700",
+  "decision": "accepted",
+  "source": "explicit_owner_conversation",
+  "recorded_on": "2026-09-12",
+  "confirmed_anonymous_quote": "我的结论是试用通过了",
+  "post_feedback": "图文可用",
+  "video_feedback": "物业视频可用",
+  "trial_start_date": null,
+  "technical_gates_waived": false,
+  "unverified_requirements": [
+    "trial_start_date",
+    "fourteen_calendar_days",
+    "three_real_use_sessions",
+    "structured_session_metrics",
+    "quality_sampling_counts"
+  ]
+}

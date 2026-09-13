@@ -45,7 +45,7 @@ func TestEditorialActionContracts(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := string(data)
-		for _, required := range []string{"payload.original_request", "小红书", "预算", "未提供可核实来源", "不编造", "需核实", "已保存选题也可能包含未经核实的前提"} {
+		for _, required := range []string{"payload.original_request", "payload.original_title", "本次有效选题", "一次现场清洁状态不能证明响应速度", "未完成记录单独标注", "危险隐患立即报告", "小红书", "预算", "未提供可核实来源", "不编造", "需核实", "已保存选题也可能包含未经核实的前提"} {
 			if !strings.Contains(body, required) {
 				t.Errorf("%s missing %q", stage, required)
 			}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explicit owner acceptance, technical gates retained",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "participant_id",
+    "trial_scope",
+    "linear_issue",
+    "decision",
+    "source",
+    "recorded_on",
+    "confirmed_anonymous_quote",
+    "post_feedback",
+    "video_feedback",
+    "trial_start_date",
+    "technical_gates_waived",
+    "unverified_requirements"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "estate-muse-owner-acceptance.v1"
+    },
+    "participant_id": {
+      "const": "EM-01"
+    },
+    "trial_scope": {
+      "const": "owner_self_trial"
+    },
+    "linear_issue": {
+      "const": "APP-1700"
+    },
+    "decision": {
+      "const": "accepted"
+    },
+    "source": {
+      "const": "explicit_owner_conversation"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "confirmed_anonymous_quote": {
+      "const": "我的结论是试用通过了"
+    },
+    "post_feedback": {
+      "const": "图文可用"
+    },
+    "video_feedback": {
+      "const": "物业视频可用"
+    },
+    "trial_start_date": {
+      "const": null
+    },
+    "technical_gates_waived": {
+      "const": false
+    },
+    "unverified_requirements": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "trial_start_date",
+          "fourteen_calendar_days",
+          "three_real_use_sessions",
+          "structured_session_metrics",
+          "quality_sampling_counts"
+        ]
+      },
+      "uniqueItems": true,
+      "minItems": 5,
+      "maxItems": 5
+    }
+  }
+}

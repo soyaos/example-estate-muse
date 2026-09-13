@@ -74,10 +74,10 @@ prompt:
     sheet_name: Topics
     max_repairs: 1
     timeout_seconds: 300
-  # prompt.upstream is intentionally omitted: EstateMuse benefits from a
-  # stronger generalist model than the operator-level default. Set
-  # SOYA_MODEL_NAME=gpt-4o (or pin via `prompt.upstream`) when deploying
-  # to get the rated quality.
+  # Upstream remains operator-configured. The 2026-09-12 editorial regression
+  # was verified with SOYA_MODEL_DEFAULT=qwen3.8-max-0902 and
+  # SOYA_MODEL_ENABLE_THINKING=false. Other models require their own regression;
+  # accepting response_format alone does not prove JSON-schema enforcement.
   steps:
     - { id: collect, prompt: prompts/collect.md }
     - { id: expand,  prompt: prompts/expand.md }
@@ -106,6 +106,8 @@ actions:
   - id: generate_post
     on: per_row
     handler: prompts/generate_post.md
+    plan_handler: prompts/plan_post.md
+    review_handler: prompts/review_action.md
     timeout: 60s
     text_validation:
       min_chars: 600
@@ -116,9 +118,14 @@ actions:
   - id: generate_video
     on: per_row
     handler: prompts/generate_video.md
+    review_handler: prompts/review_action.md
     timeout: 60s
     text_validation:
       section: 口播全文
+      mirror_table:
+        section: 分镜
+        column: 口播
+        rows: 3
       min_chars: 60
       max_chars: 130
       max_repairs: 1

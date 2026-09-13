@@ -1,6 +1,6 @@
 # APP-1701 anonymous evidence
 
-This directory is the machine-readable input for the EstateMuse two-week
+This directory is the machine-readable input for the EstateMuse
 acceptance report. It is intentionally narrower than the private trial notes.
 
 Scope: `owner_self_trial`, decided by the owner on **2026-09-09**. Only `EM-01`
@@ -19,6 +19,7 @@ private store and use only opaque `EV-*` references in participant evidence.
 evidence/
 ├── participants/
 │   └── EM-01.json
+├── owner-acceptance.json  # explicit final owner decision, separate from measured sessions
 ├── issue-register.json
 └── technical-baseline.json
 ```
@@ -32,13 +33,34 @@ synthesize missing attestations, dates, quality scores, outcomes or quotes.
 coordinator are not required. `owner_confirmed` refers to confirmation by the
 owner, not an AI assertion.
 
-The unchanged gates require at least 14 calendar days, 3 real-use sessions,
+The original structured-evidence path requires at least 14 calendar days, 3 real-use sessions,
 one 500-row XLSX run opened and edited in a desktop spreadsheet app, and both
 `generate_post` and `generate_video` across the trial. Use the session/action
 field definitions in `schemas/participant.schema.json`; a session does not need
 3 actions. Preserve latency, persisted-row, quality sampling, P0/P1 retest,
 P2 tracking and privacy checks. Automatic mock evidence remains separate and
 cannot stand in for personal use or quality judgments.
+
+## Explicit owner acceptance (2026-09-12)
+
+The owner explicitly said “图文可用”, “物业视频可用”, then “我的结论是试用通过了”.
+APP-1700 is accepted. `owner-acceptance.json` records these anonymous statements
+and their source; `schemas/owner-acceptance.schema.json` defines the closed form.
+This is a separate acceptance decision, not a manufactured participant record.
+The first-use date is unknown; 14 days, 3 sessions, structured session metrics
+and quality sampling counts remain unverified. Do not ask the owner to recreate
+these historical records or do more subjective acceptance just to pass the gate.
+
+A valid explicit decision supersedes missing participant/session/action records;
+the report keeps those missing records visible as historical gaps, with unknown
+metrics. Existing evidence is still validated and cannot hide malformed data,
+privacy violations or failed latency checks. Without the explicit decision the
+original requirements remain blocking. An invalid decision fails closed.
+
+The decision never waives a dirty technical snapshot, failed/missing automatic
+production-path proof, incomplete technical review or open P0/P1. P2 must remain
+tracked. The overall report can remain BLOCKED while owner acceptance is passed.
+No automatic run is counted as a real human session.
 
 Run the automatic production-path proof before final acceptance:
 

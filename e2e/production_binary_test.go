@@ -168,6 +168,18 @@ func newProductionMock(t *testing.T) *productionMock {
 		reject := m.rejectSelection
 		m.mu.Unlock()
 		switch {
+		case strings.Contains(system, "# plan_post"):
+			response = "MOCK_EDITORIAL_PLAN"
+		case strings.Contains(system, "# EstateMuse 独立稿件审查"):
+			var review struct {
+				Request map[string]any `json:"request"`
+				Draft   string         `json:"draft"`
+			}
+			if json.Unmarshal([]byte(user), &review) != nil || review.Request["row_id"] == nil || !strings.Contains(review.Draft, "ACTION_OK") {
+				http.Error(w, "invalid review envelope", 400)
+				return
+			}
+			response = `{"approved":true,"findings":[],"checks":[{"id":"business_context","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"factual_claims","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"method_logic","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"format","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"safety","passed":true,"reason":"Protocol fixture; not factual evaluation"}]}` // tests protocol wiring only
 		case strings.Contains(system, "# expand"):
 			var batch struct {
 				TargetCount int    `json:"target_count"`
@@ -205,7 +217,7 @@ func newProductionMock(t *testing.T) *productionMock {
 			m.mu.Lock()
 			m.action = append(m.action, user)
 			m.mu.Unlock()
-			response = "# 生产链路测试短视频\n\n## 口播全文\n" + strings.Repeat("核对清单与现场条件。", 10) + "\n## 待核实\nACTION_OK"
+			response = "# 生产链路测试短视频\n\n## 口播全文\n" + strings.Repeat("核对清单与现场条件。", 10) + "\n## 待核实\nACTION_OK\n" + mockNarrationTable("核对清单与现场条件。", 3, 4, 3)
 		}
 		writeSSE(t, w, response)
 	}))

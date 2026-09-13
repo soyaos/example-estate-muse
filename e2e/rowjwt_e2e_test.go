@@ -63,9 +63,13 @@ const (
 
 // Valid for both declared text contracts so auth assertions exercise auth,
 // without disabling the production pack's output validation.
-var mockAnswer = strings.Repeat("【MOCK】亚运村次新房图文已生成。", 40) +
+var mockAnswer = strings.Repeat("【MOCK】亚运村次新房图文已生成。", 35) +
 	"\n## 口播全文\n" + strings.Repeat("请核实房源条件并记录需求。", 7) +
-	"\n## 待核实事项\n测试文本，不代表真实内容。"
+	"\n## 待核实事项\n测试文本，不代表真实内容。\n" + mockNarrationTable("请核实房源条件并记录需求。", 2, 3, 2)
+
+func mockNarrationTable(sentence string, first, middle, last int) string {
+	return "## 分镜\n时间 | 口播 | 画面\n--- | --- | ---\n0–3秒 | " + strings.Repeat(sentence, first) + " | 示意一\n3–24秒 | " + strings.Repeat(sentence, middle) + " | 示意二\n24–30秒 | " + strings.Repeat(sentence, last) + " | 示意三\n"
+}
 
 // upstreamCapture records every chat/completions body the mock upstream
 // receives, so tests can assert (a) the real prompt file content reached
@@ -108,7 +112,7 @@ type harness struct {
 // startHarness boots the full stack. Uses t.Setenv for the SOYA_MODEL_*
 // upstream config (read by RegisterFromPack via llmcall.ResolveConfig),
 // so harness tests must not call t.Parallel().
-func startHarness(t *testing.T) *harness {
+func startHarness(t *testing.T, reviewVerdicts ...string) *harness {
 	t.Helper()
 	dataDir := t.TempDir()
 
@@ -123,8 +127,32 @@ func startHarness(t *testing.T) *harness {
 		var body map[string]any
 		_ = json.Unmarshal(raw, &body)
 		capture.add(body)
+		answer := mockAnswer
+		messages, _ := body["messages"].([]any)
+		if len(messages) == 2 {
+			system, _ := messages[0].(map[string]any)
+			if text, _ := system["content"].(string); strings.Contains(text, "# plan_post") {
+				answer = "MOCK_EDITORIAL_PLAN"
+			}
+			if text, _ := system["content"].(string); strings.Contains(text, "# EstateMuse 独立稿件审查") {
+				user, _ := messages[1].(map[string]any)
+				text, _ := user["content"].(string)
+				var review struct {
+					Request map[string]any `json:"request"`
+					Draft   string         `json:"draft"`
+				}
+				if json.Unmarshal([]byte(text), &review) != nil || review.Draft != mockAnswer || review.Request["row_id"] == nil {
+					http.Error(w, "invalid review envelope", 400)
+					return
+				}
+				answer = `{"approved":true,"findings":[],"checks":[{"id":"business_context","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"factual_claims","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"method_logic","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"format","passed":true,"reason":"Protocol fixture; not factual evaluation"},{"id":"safety","passed":true,"reason":"Protocol fixture; not factual evaluation"}]}` // protocol stub, not semantic evidence
+				if len(reviewVerdicts) > 0 {
+					answer = reviewVerdicts[0]
+				}
+			}
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q},\"finish_reason\":null}]}\n\n", mockAnswer)
+		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q},\"finish_reason\":null}]}\n\n", answer)
 		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
 		fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
@@ -239,7 +267,12 @@ func TestE2E_RowToken_OwnRow_AllowedAndActionRuns(t *testing.T) {
 
 	// The REAL prompt file must have reached the upstream as the system
 	// message, and the user message must carry the row envelope.
-	upstreamBody := h.upstream.last()
+	if h.upstream.count() != 3 {
+		t.Fatalf("want planning, generation and review calls, got %d", h.upstream.count())
+	}
+	h.upstream.mu.Lock()
+	upstreamBody := h.upstream.bodies[1]
+	h.upstream.mu.Unlock()
 	if upstreamBody == nil {
 		t.Fatal("upstream never called")
 	}
@@ -259,6 +292,9 @@ func TestE2E_RowToken_OwnRow_AllowedAndActionRuns(t *testing.T) {
 		t.Fatal("system message is not the verbatim prompts/generate_post.md body")
 	}
 	user := msgs[1].(map[string]any)
+	if !strings.Contains(user["content"].(string), "MOCK_EDITORIAL_PLAN") {
+		t.Fatal("generation missing editorial plan")
+	}
 	if !strings.Contains(user["content"].(string), `"row_id":"row-17"`) {
 		t.Fatalf("user envelope missing row_id: %v", user["content"])
 	}
