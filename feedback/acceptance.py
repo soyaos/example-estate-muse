@@ -27,6 +27,8 @@ TRIAL_SCOPE = "owner_self_trial"
 SCOPE_DECIDED_ON = "2026-09-09"
 TECHNICAL_SCHEMA = "estate-muse-technical-baseline.v1"
 ISSUE_SCHEMA = "estate-muse-issue-register.v1"
+OWNER_ACCEPTANCE_SCHEMA = "estate-muse-owner-acceptance.v1"
+OWNER_UNVERIFIED = {"trial_start_date", "fourteen_calendar_days", "three_real_use_sessions", "structured_session_metrics", "quality_sampling_counts"}
 EXPECTED_PARTICIPANTS = ("EM-01",)
 PROFILE_VALUES = {
     "本人真实需求试用",
@@ -87,6 +89,8 @@ class ValidationResult:
         self.participants: dict[str, dict[str, Any]] = {}
         self.technical: dict[str, Any] | None = None
         self.issue_register: dict[str, Any] | None = None
+        self.owner_acceptance: dict[str, Any] | None = None
+        self.superseded_requirements: list[str] = []
 
     @property
     def passed(self) -> bool:
@@ -514,17 +518,58 @@ def _validate_issue_register(data: dict[str, Any], source: Path, result: Validat
             result.add(f"{label}.linear_issue: must be an APP-* issue identifier")
         if severity in {"P0", "P1"} and status != "fixed_and_retested":
             result.add(f"{label}: {severity} must be fixed_and_retested")
-        if severity == "P2" and status != "tracked":
-            result.add(f"{label}: P2 must be tracked in its Linear issue")
+
+
+def _load_owner_acceptance(evidence_dir: Path, result: ValidationResult) -> None:
+    """A separate owner decision replaces the questionnaire, never technical gates."""
+    path = evidence_dir / "owner-acceptance.json"
+    if not path.is_file():
+        return
+    before = len(result.errors)
+    data = _load_json(path, result)
+    if data is None:
+        return
+    expected = {
+        "schema_version": OWNER_ACCEPTANCE_SCHEMA,
+        "participant_id": "EM-01",
+        "trial_scope": TRIAL_SCOPE,
+        "linear_issue": "APP-1700",
+        "decision": "accepted",
+        "source": "explicit_owner_conversation",
+        "confirmed_anonymous_quote": "我的结论是试用通过了",
+        "post_feedback": "图文可用",
+        "video_feedback": "物业视频可用",
+        "trial_start_date": None,
+        "technical_gates_waived": False,
+    }
+    _reject_unknown(data, set(expected) | {"recorded_on", "unverified_requirements"}, str(path), result)
+    for key, value in expected.items():
+        if key not in data or type(data[key]) is not type(value) or data[key] != value:
+            result.add(f"{path}.{key}: must equal {value!r}")
+    _parse_date(data.get("recorded_on"), f"{path}.recorded_on", result)
+    unverified = data.get("unverified_requirements")
+    if (not isinstance(unverified, list) or not all(isinstance(item, str) for item in unverified)
+            or len(unverified) != len(OWNER_UNVERIFIED) or set(unverified) != OWNER_UNVERIFIED):
+        result.add(f"{path}.unverified_requirements: preserve all unverified historical requirements")
+    if len(result.errors) == before:
+        result.owner_acceptance = data
+
+
+def _owner_requirement(result: ValidationResult, message: str) -> None:
+    if result.owner_acceptance:
+        result.superseded_requirements.append(message)
+    else:
+        result.add(message)
 
 
 def validate_evidence(evidence_dir: Path) -> ValidationResult:
     result = ValidationResult()
+    _load_owner_acceptance(evidence_dir, result)
     participants_dir = evidence_dir / "participants"
     for participant_id in EXPECTED_PARTICIPANTS:
         path = participants_dir / f"{participant_id}.json"
         if not path.is_file():
-            result.add(f"{path}: missing real-participant evidence")
+            _owner_requirement(result, f"{path}: missing real-participant evidence")
             continue
         data = _load_json(path, result)
         if data is not None:
@@ -566,7 +611,7 @@ def validate_evidence(evidence_dir: Path) -> ValidationResult:
         if isinstance(action, dict)
     }
     for action_name in sorted(ACTION_VALUES - action_types):
-        result.add(f"trial-wide evidence: no successful {action_name} action recorded")
+        _owner_requirement(result, f"trial-wide evidence: no successful {action_name} action recorded")
     return result
 
 
@@ -622,7 +667,7 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
     for participant_id in EXPECTED_PARTICIPANTS:
         participant = result.participants.get(participant_id)
         if not participant:
-            participant_rows.append(f"| {participant_id} | — | 0 | 0 | 0 | 缺少证据 |")
+            participant_rows.append(f"| {participant_id} | — | 未知 | 未知 | 未知 | {'本人已验收，结构化记录缺失' if result.owner_acceptance else '缺少证据'} |")
             continue
         days, session_count, xlsx_durations, action_durations = _participant_metrics(participant)
         all_xlsx.extend(xlsx_durations)
@@ -668,7 +713,7 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
     )
 
     lines = [
-        "# EstateMuse v0.1.0 Alpha 两周试用验收报告",
+        "# EstateMuse v0.1.0 Alpha 试用验收报告",
         "",
         f"> 结论：**{status}**。本报告仅汇总匿名结构化证据，不包含身份、联系方式、原始输入或生成内容正文。",
         "",
@@ -676,16 +721,17 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "- 证据目录：`feedback/evidence`",
         f"- 验收范围：{TRIAL_SCOPE}（本人 EM-01 单人真实需求试用）",
         f"- 范围决定日期：{SCOPE_DECIDED_ON}；替代此前 5 名外部作者招募要求，不代表外部用户验证。",
-        f"- 真人参与者：{len(result.participants)} / 1",
-        f"- 会话总数：{total_sessions}",
+        f"- {'已有结构化参与者记录' if result.owner_acceptance else '真人参与者'}：{len(result.participants)} / 1",
+        f"- 已记录会话总数：{total_sessions}（缺少记录不等于实际未使用）",
+        f"- 本人最终验收：{'通过（APP-1700）；技术门槛仍独立执行' if result.owner_acceptance else '按原结构化试用要求核验'}",
         f"- 自动生产链路：{'通过' if technical_passed else '未通过或缺失'}",
         "",
         "## 硬门槛",
         "",
         "| 指标 | 结果 |",
         "| --- | --- |",
-        f"| 本人 EM-01 × 至少 14 天 | {'通过' if len(result.participants) == 1 and result.passed else '未满足'} |",
-        f"| 至少 3 次使用、一次 500 行 XLSX、全期覆盖图文和视频 Action | {'通过' if result.passed else '未满足'} |",
+        f"| 本人 EM-01 × 至少 14 天 | {'未核实；本人最终验收已替代此要求' if result.owner_acceptance else ('通过' if len(result.participants) == 1 and result.passed else '未满足')} |",
+        f"| 至少 3 次使用、一次 500 行 XLSX、全期覆盖图文和视频 Action | {'未核实；不再要求本人补录' if result.owner_acceptance else ('通过' if result.passed else '未满足')} |",
         f"| 500 行生成 ≤ 300000 ms | p50 {_percentile(all_xlsx, 0.50)}；p95 {_percentile(all_xlsx, 0.95)} |",
         f"| 图文/视频 Action ≤ 60000 ms | p50 {_percentile(all_actions, 0.50)}；p95 {_percentile(all_actions, 0.95)} |",
         f"| 跨进程重启状态保留 | {'通过' if technical_passed else '未满足'} |",
@@ -699,9 +745,21 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "## 匿名摘要",
         "",
     ]
+    if result.owner_acceptance:
+        lines.extend([
+            f"- 决策记录日期：{result.owner_acceptance['recorded_on']}；来源：本人对话明确确认。",
+            "- 本人原话：“我的结论是试用通过了”；此前分别确认“图文可用”“物业视频可用”。",
+            "- 首次试用日期：未知。14 天、3 次、结构化会话指标及质量抽样数未核实，不补造记录。",
+            "- APP-1700 本人验收完成；不代表审核缺陷已修复、代码已提交或自动测试代表真人使用。",
+            "",
+            "### 已被本人最终验收替代的记录要求（保留缺项）",
+            "",
+            *[f"- {_escape(_display_error(item, evidence_dir))}" for item in result.superseded_requirements],
+            "",
+        ])
     if summaries:
         lines.extend(summaries)
-    else:
+    elif not result.owner_acceptance:
         lines.extend(["尚无本人真实试用反馈；不生成替代性评价。", ""])
     lines.extend([
         "## P0 / P1 / P2",
@@ -720,7 +778,7 @@ def render_report(result: ValidationResult, evidence_dir: Path, as_of: str) -> s
         "python3 feedback/acceptance.py verify",
         "```",
         "",
-        "只有该命令返回 0 时，APP-1701 和 APP-506 才具备关闭条件。自动测试通过不能替代本人两周真实试用；此结论不覆盖外部用户验证。",
+        "只有该命令返回 0 时，APP-1701 和 APP-506 才具备关闭条件。本人最终验收可显式替代历史试用记录要求；技术门槛、隐私检查及已有证据的真实性检查不予豁免，此结论不覆盖外部用户验证。",
         "",
     ])
     return "\n".join(lines)

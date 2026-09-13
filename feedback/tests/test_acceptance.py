@@ -187,19 +187,34 @@ class AcceptanceTests(unittest.TestCase):
         result = acceptance.validate_evidence(self.root)
         self.assertTrue(any("possible API token" in error for error in result.errors))
 
-    def test_open_p1_or_untracked_p2_is_rejected(self) -> None:
+    def test_open_p1_or_invalid_p2_status_is_rejected(self) -> None:
         register = {
             "schema_version": acceptance.ISSUE_SCHEMA,
             "review_completed": True,
             "issues": [
                 {"code": "EM-P1-001", "severity": "P1", "status": "tracked", "linear_issue": "APP-2001"},
-                {"code": "EM-P2-001", "severity": "P2", "status": "fixed_and_retested", "linear_issue": "APP-2002"},
+                {"code": "EM-P2-001", "severity": "P2", "status": "ignored", "linear_issue": "APP-2002"},
             ],
         }
         self.write_json("issue-register.json", register)
         result = acceptance.validate_evidence(self.root)
         self.assertTrue(any("P1 must be fixed_and_retested" in error for error in result.errors))
-        self.assertTrue(any("P2 must be tracked" in error for error in result.errors))
+        self.assertTrue(any("status: must be fixed_and_retested or tracked" in error for error in result.errors))
+
+    def test_p2_accepts_tracked_or_fixed_but_always_requires_linear_issue(self) -> None:
+        register = json.loads((self.root / "issue-register.json").read_text())
+        for status in ("tracked", "fixed_and_retested"):
+            for linear_issue in ("APP-2002", None, ""):
+                with self.subTest(status=status, linear_issue=linear_issue):
+                    register["issues"][1]["status"] = status
+                    register["issues"][1]["linear_issue"] = linear_issue
+                    self.write_json("issue-register.json", register)
+                    result = acceptance.validate_evidence(self.root)
+                    if linear_issue:
+                        self.assertTrue(result.passed, result.errors)
+                    else:
+                        self.assertFalse(result.passed)
+                        self.assertTrue(any("linear_issue: must be an APP-*" in error for error in result.errors))
 
     def test_report_preserves_blocked_truth_without_inventing_feedback(self) -> None:
         for path in (self.root / "participants").glob("*.json"):
@@ -261,6 +276,71 @@ class AcceptanceTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("**BLOCKED**", report)
         self.assertIn("| EM-01 | 公众号作者 | 0 |", report)
+
+    def write_owner_acceptance(self) -> None:
+        data = json.loads((MODULE_PATH.parent / "evidence/owner-acceptance.json").read_text())
+        self.write_json("owner-acceptance.json", data)
+
+    def test_explicit_owner_acceptance_replaces_missing_records_without_inventing_metrics(self) -> None:
+        (self.root / "participants/EM-01.json").unlink()
+        self.write_owner_acceptance()
+        result = acceptance.validate_evidence(self.root)
+        self.assertTrue(result.passed, result.errors)
+        self.assertEqual({}, result.participants)
+        self.assertEqual(3, len(result.superseded_requirements))
+        report = acceptance.render_report(result, self.root, "2026-09-12")
+        self.assertIn("本人最终验收：通过（APP-1700）", report)
+        self.assertIn("首次试用日期：未知", report)
+        self.assertIn("14 天、3 次、结构化会话指标及质量抽样数未核实", report)
+        self.assertIn("| EM-01 | — | 未知 | 未知 | 未知 |", report)
+        self.assertIn("missing real-participant evidence", report)
+        self.assertNotIn("尚无本人真实试用反馈", report)
+
+    def test_owner_acceptance_cannot_waive_technical_or_review_gates(self) -> None:
+        (self.root / "participants/EM-01.json").unlink()
+        self.write_owner_acceptance()
+        technical = json.loads((self.root / "technical-baseline.json").read_text())
+        technical["working_tree"]["clean"] = False
+        technical["production_trial_path"]["passed"] = False
+        self.write_json("technical-baseline.json", technical)
+        register = json.loads((self.root / "issue-register.json").read_text())
+        register["review_completed"] = False
+        register["issues"][0]["status"] = "tracked"
+        self.write_json("issue-register.json", register)
+        result = acceptance.validate_evidence(self.root)
+        self.assertIsNotNone(result.owner_acceptance)
+        self.assertEqual(4, len(result.errors), result.errors)
+        self.assertTrue(any("working_tree.clean" in error for error in result.errors))
+        self.assertTrue(any("production_trial_path.passed" in error for error in result.errors))
+        self.assertTrue(any("review_completed" in error for error in result.errors))
+        self.assertTrue(any("P1 must be fixed_and_retested" in error for error in result.errors))
+
+    def test_invalid_or_private_owner_acceptance_fails_closed(self) -> None:
+        original = json.loads((MODULE_PATH.parent / "evidence/owner-acceptance.json").read_text())
+        (self.root / "participants/EM-01.json").unlink()
+        for key, value in (("technical_gates_waived", True), ("technical_gates_waived", 0),
+                           ("decision", "pending"), ("source", "ai_test"),
+                           ("trial_start_date", "2026-08-01"), ("unverified_requirements", []),
+                           ("recorded_on", "unknown"), ("email", "person@example.com")):
+            with self.subTest(key=key, value=value):
+                data = copy.deepcopy(original)
+                data[key] = value
+                self.write_json("owner-acceptance.json", data)
+                result = acceptance.validate_evidence(self.root)
+                self.assertFalse(result.passed)
+                self.assertIsNone(result.owner_acceptance)
+                self.assertTrue(any("missing real-participant evidence" in error for error in result.errors))
+
+    def test_owner_acceptance_never_hides_invalid_existing_evidence(self) -> None:
+        self.write_owner_acceptance()
+        data = participant(1)
+        data["sessions"][0]["actions"][0]["duration_ms"] = 60001
+        data["email"] = "person@example.com"
+        self.write_json("participants/EM-01.json", data)
+        result = acceptance.validate_evidence(self.root)
+        self.assertFalse(result.passed)
+        self.assertTrue(any("60001 exceeds" in error for error in result.errors))
+        self.assertTrue(any("possible email address" in error for error in result.errors))
 
     def test_dirty_technical_snapshot_is_a_hard_blocker(self) -> None:
         technical = json.loads((self.root / "technical-baseline.json").read_text(encoding="utf-8"))

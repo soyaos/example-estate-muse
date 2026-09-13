@@ -1,5 +1,18 @@
 {
   "schema_version": "estate-muse-issue-register.v1",
-  "review_completed": false,
-  "issues": []
+  "review_completed": true,
+  "issues": [
+    {
+      "code": "EM-P1-001",
+      "severity": "P1",
+      "status": "fixed_and_retested",
+      "linear_issue": "APP-1701"
+    },
+    {
+      "code": "EM-P2-001",
+      "severity": "P2",
+      "status": "fixed_and_retested",
+      "linear_issue": "APP-1701"
+    }
+  ]
 }
